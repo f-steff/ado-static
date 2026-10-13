@@ -1,0 +1,43 @@
+name: CI
+
+# Build, verify and package on every pull request and on pushes to the release branches.
+# Rationale: this is the required status check for the protected `main` branch; it never publishes.
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      # npm may block esbuild's postinstall; fetch the binary explicitly if needed.
+      - name: Ensure esbuild binary
+        run: node node_modules/esbuild/install.js
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Identifier scan
+        run: npm run verify:clean
+      - name: Build (production)
+        run: npm run build:prod
+      - name: Package VSIX (stable manifest, artifact only)
+        run: npm run package:stable
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: "*.vsix"
+          if-no-files-found: error
