@@ -1,0 +1,60 @@
+name: Publish stable
+
+# Publish the public stable edition when `main` is merged.
+# Rationale: the version is derived from git tags, then the published version is tagged. The
+# `MARKETPLACE_PAT` secret holds a Marketplace (Manage) token.
+on:
+  push:
+    branches:
+      - main
+
+# Needed to push the version tag; the branch itself stays protected.
+permissions:
+  contents: write
+
+# Serialize publishes so two merges cannot compute the same version.
+concurrency:
+  group: publish-stable
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags are the version source of truth
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Ensure esbuild binary
+        run: node node_modules/esbuild/install.js
+      - name: Verify
+        run: |
+          npx tsc --noEmit
+          npm run lint
+          npm test
+          npm run verify:clean
+      - name: Compute version
+        id: version
+        run: node ci/version.mjs stable --write | tee -a "$GITHUB_OUTPUT"
+      - name: Build (production)
+        run: npm run build:prod
+      - name: Publish stable extension
+        env:
+          MARKETPLACE_PAT: ${{ secrets.MARKETPLACE_PAT }}
+        run: |
+          npx tfx-cli extension publish \
+            --publisher f-steff \
+            --manifests ado-manifests/azure-devops-extension-base.json \
+            --overrides-file ado-manifests/azure-devops-extension-stable.json \
+            --token "$MARKETPLACE_PAT"
+      - name: Tag the published version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Static ${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.tag }}"
