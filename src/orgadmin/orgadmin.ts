@@ -449,6 +449,45 @@ function buildBackupSection(): HTMLElement {
         "because their content is stored in the same collection."
     )
   );
+
+  // Explain the pipeline route (docs/06): the same archive, but scriptable and schedulable. The
+  // snippets are shown rather than created, so the extension needs no write scopes and never touches
+  // a repository.
+  section.appendChild(el("h2", undefined, "Automate it in a pipeline"));
+  section.appendChild(
+    el(
+      "p",
+      "subtitle",
+      "The StaticAdmin@0 task does the same from a pipeline: mode: backup writes the archive and can " +
+        "attach it as a pipeline artifact, mode: restore writes an archive back. The tasks detect " +
+        "which edition is installed, so one pipeline works for both."
+    )
+  );
+  const backupSnippet = el("pre", "code");
+  backupSnippet.textContent =
+    "steps:\n" +
+    "  - task: StaticAdmin@0\n" +
+    "    inputs:\n" +
+    "      mode: backup\n" +
+    "      backupPath: '$(Build.ArtifactStagingDirectory)/static-backup.zip'\n" +
+    "      artifactName: 'static-backup'   # attaches the archive as a pipeline artifact\n";
+  section.appendChild(backupSnippet);
+
+  const restoreSnippet = el("pre", "code");
+  restoreSnippet.textContent =
+    "steps:\n" +
+    "  - download: current\n" +
+    "    artifact: static-backup\n" +
+    "  - task: StaticAdmin@0\n" +
+    "    inputs:\n" +
+    "      mode: restore\n" +
+    "      backupPath: '$(Pipeline.Workspace)/static-backup/static-backup.zip'\n" +
+    "      dryRun: false                   # true reports the plan without writing\n";
+  section.appendChild(restoreSnippet);
+
+  section.appendChild(
+    el("p", "hint", "Full input list and more examples: docs/06-pipeline-integration.md.")
+  );
   return section;
 }
 
