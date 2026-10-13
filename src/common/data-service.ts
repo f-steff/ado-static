@@ -346,6 +346,33 @@ export async function listDocuments(): Promise<Array<Record<string, unknown>>> {
   }
 }
 
+/**
+ * Writes a set of documents into the project's collection (used by the import feature).
+ * Rationale: import is the only writer that does not know the current server state, so it strips any
+ * stale `__etag`, and with `replace` it also removes documents the bundle does not contain - that is
+ * what makes "seed the dev edition from stable" land on an identical store rather than a mixture.
+ */
+export async function writeProjectDocuments(
+  documents: Array<Record<string, unknown>>,
+  replace: boolean
+): Promise<void> {
+  const collection = staticCollection();
+  if (replace) {
+    const keep = new Set(documents.map((document) => String(document.id)));
+    for (const existing of await listCollection(collection)) {
+      const id = String(existing.id || "");
+      if (id && !keep.has(id)) {
+        await deleteDocument(collection, id);
+      }
+    }
+  }
+  for (const document of documents) {
+    const body: Record<string, unknown> = { ...document };
+    delete body.__etag;
+    await putDocument(collection, body);
+  }
+}
+
 /** Reads the content metadata for a page (chunk count/encoding), or null if unpublished. */
 export async function getContentMeta(pageId: string): Promise<ContentMeta | null> {
   try {
