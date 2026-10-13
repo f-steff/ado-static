@@ -1,0 +1,41 @@
+/*
+ * Build-results report tab.
+ * Rationale: mirrors the extension's other frames (plain CSS + ADO theme variables).
+ */
+#root {
+    height: 100%;
+}
+
+.report-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    padding: 0 8px;
+}
+
+.report-tab {
+    border: none;
+    background: transparent;
+    padding: 10px 14px;
+    font: inherit;
+    color: var(--text-secondary-color, #605e5c);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+}
+
+.report-tab.active {
+    color: var(--text-primary-color, #201f1e);
+    border-bottom-color: var(--communication-background, #0078d4);
+    font-weight: 600;
+}
+
+.report-frame {
+    width: 100%;
+    border: 0;
+    height: calc(100vh - 60px);
+}
+
+.report-message {
+    padding: 24px;
+    color: var(--text-secondary-color, #605e5c);
+}

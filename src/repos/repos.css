@@ -1,0 +1,107 @@
+/*
+ * Repos hub styles.
+ * Rationale: mirrors the hub/admin look (plain CSS + ADO theme variables) so the surfaces are
+ * visually consistent and follow the host theme.
+ */
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    color: var(--text-primary-color, #201f1e);
+    background: var(--background-color, #ffffff);
+}
+
+/* Links look the same before and after visiting. */
+a,
+a:visited {
+    color: #0078d4;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.page {
+    padding: 20px 24px;
+}
+
+h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+}
+
+/* Small extension icon next to page headings. */
+.heading-icon {
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+    vertical-align: -4px;
+    border-radius: 4px;
+}
+
+.subtitle {
+    color: var(--text-secondary-color, #605e5c);
+    margin: 4px 0 16px;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+input[type="text"] {
+    padding: 6px 8px;
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 3px;
+    font: inherit;
+    min-width: 260px;
+}
+
+input[type="text"]:focus {
+    outline: 2px solid var(--focus-border-color, #0078d4);
+    outline-offset: -1px;
+}
+
+table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table.data-table th,
+table.data-table td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    vertical-align: middle;
+}
+
+table.data-table thead th {
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    font-weight: 600;
+}
+
+table.data-table tbody tr:hover {
+    background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+}
+
+.empty {
+    color: var(--text-secondary-color, #605e5c);
+    font-style: italic;
+}
+
+/* Running-version indicator: makes a stale/cached bundle obvious at a glance. */
+.version {
+    color: var(--text-tertiary-color, #a19f9d);
+    font-size: 11px;
+    text-align: center;
+    margin: 24px 0 0;
+}
+
+.error {
+    color: var(--status-error-text, #a4262c);
+}

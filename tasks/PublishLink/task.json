@@ -1,0 +1,101 @@
+{
+    "id": "9c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f",
+    "name": "PublishLink",
+    "friendlyName": "Publish Link",
+    "description": "Create or update a fixed link (a stored URL) in the Azure DevOps Static extension.",
+    "author": "f-steff",
+    "helpMarkDown": "Publishes a 'fixed pipeline artifact' link: the URL is stored as-is (it may point outside this project). See the Static extension docs: docs/06-pipeline-integration.md.",
+    "category": "Utility",
+    "visibility": [
+        "Build",
+        "Release"
+    ],
+    "runsOn": [
+        "Agent"
+    ],
+    "version": {
+        "Major": 0,
+        "Minor": 2,
+        "Patch": 0
+    },
+    "minimumAgentVersion": "2.144.0",
+    "instanceNameFormat": "Publish link $(slug)",
+    "inputs": [
+        {
+            "name": "title",
+            "type": "string",
+            "label": "Link title",
+            "required": true,
+            "helpMarkDown": "Human-readable title shown in the Links hub."
+        },
+        {
+            "name": "slug",
+            "type": "string",
+            "label": "Link slug",
+            "required": true,
+            "helpMarkDown": "Stable, unique slug for the link (lowercase words separated by hyphens)."
+        },
+        {
+            "name": "url",
+            "type": "string",
+            "label": "URL",
+            "required": false,
+            "helpMarkDown": "The URL to store (http/https). It may point outside this project. Provide this or 'URL file'."
+        },
+        {
+            "name": "urlFile",
+            "type": "filePath",
+            "label": "URL file (first line)",
+            "required": false,
+            "helpMarkDown": "A text file whose FIRST line is the URL (any/all line endings, or none). Used when 'URL' is empty."
+        },
+        {
+            "name": "comment",
+            "type": "string",
+            "label": "Comment",
+            "required": false,
+            "helpMarkDown": "Comment stored on the link (shown in the hub)."
+        },
+        {
+            "name": "createIfMissing",
+            "type": "boolean",
+            "label": "Create the link if it does not exist",
+            "required": false,
+            "defaultValue": "true"
+        },
+        {
+            "name": "organizationUrl",
+            "type": "string",
+            "label": "Organization URL",
+            "required": true,
+            "defaultValue": "$(System.CollectionUri)"
+        },
+        {
+            "name": "accessToken",
+            "type": "string",
+            "label": "Access token",
+            "required": true,
+            "defaultValue": "$(System.AccessToken)",
+            "helpMarkDown": "Requires 'Allow scripts to access the OAuth token' on the pipeline."
+        },
+        {
+            "name": "publisher",
+            "type": "string",
+            "label": "Extension publisher",
+            "required": true,
+            "defaultValue": "f-steff"
+        },
+        {
+            "name": "extension",
+            "type": "string",
+            "label": "Extension id",
+            "required": true,
+            "defaultValue": "static"
+        }
+    ],
+    "execution": {
+        "Node20_1": {
+            "target": "index.js"
+        }
+    }
+}

@@ -1,0 +1,102 @@
+{
+    "id": "7b3f3d2e-9c4a-4a6f-9d2b-1f0c5e6a7b8c",
+    "name": "PublishPage",
+    "friendlyName": "Publish Page",
+    "description": "Publish or update a Pages page's content in the Azure DevOps Pages extension.",
+    "author": "f-steff",
+    "helpMarkDown": "See the Pages extension docs: docs/06-pipeline-integration.md.",
+    "category": "Utility",
+    "visibility": [
+        "Build",
+        "Release"
+    ],
+    "runsOn": [
+        "Agent"
+    ],
+    "version": {
+        "Major": 0,
+        "Minor": 1,
+        "Patch": 4
+    },
+    "minimumAgentVersion": "2.144.0",
+    "instanceNameFormat": "Publish Static page/tab",
+    "inputs": [
+        {
+            "name": "page",
+            "type": "string",
+            "label": "Page slug (enables publishing a page)",
+            "required": false,
+            "helpMarkDown": "Slug of the page to create or update. Set this to publish a page; leave empty to publish only a build tab (set 'tabName')."
+        },
+        {
+            "name": "sourcePath",
+            "type": "filePath",
+            "label": "Content file",
+            "required": true,
+            "helpMarkDown": "Self-contained HTML file to publish."
+        },
+        {
+            "name": "comment",
+            "type": "string",
+            "label": "Comment",
+            "required": false,
+            "helpMarkDown": "Comment stored on the page (shown in the hub)."
+        },
+        {
+            "name": "tabName",
+            "type": "string",
+            "label": "Report tab name (optional)",
+            "required": false,
+            "helpMarkDown": "When set, the page is also attached to the build so it appears under a 'Static page' tab in the build results. Leave empty for no tab."
+        },
+        {
+            "name": "createIfMissing",
+            "type": "boolean",
+            "label": "Create the page if it does not exist",
+            "required": false,
+            "defaultValue": "true"
+        },
+        {
+            "name": "organizationUrl",
+            "type": "string",
+            "label": "Organization URL",
+            "required": true,
+            "defaultValue": "$(System.CollectionUri)"
+        },
+        {
+            "name": "accessToken",
+            "type": "string",
+            "label": "Access token",
+            "required": true,
+            "defaultValue": "$(System.AccessToken)",
+            "helpMarkDown": "Requires 'Allow scripts to access the OAuth token' on the pipeline."
+        },
+        {
+            "name": "publisher",
+            "type": "string",
+            "label": "Extension publisher",
+            "required": true,
+            "defaultValue": "f-steff"
+        },
+        {
+            "name": "extension",
+            "type": "string",
+            "label": "Extension id",
+            "required": true,
+            "defaultValue": "static"
+        },
+        {
+            "name": "chunkSizeKb",
+            "type": "string",
+            "label": "Chunk size (KiB, compressed)",
+            "required": false,
+            "defaultValue": "3072",
+            "helpMarkDown": "Maximum compressed bytes per stored document. Must keep the base64 document below the service limit (~5 MiB)."
+        }
+    ],
+    "execution": {
+        "Node20_1": {
+            "target": "index.js"
+        }
+    }
+}
