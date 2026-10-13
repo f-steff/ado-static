@@ -88,7 +88,8 @@
             "type": "string",
             "label": "Extension id",
             "required": true,
-            "defaultValue": "static"
+            "defaultValue": "auto",
+            "helpMarkDown": "Extension id: 'auto' (default) uses whichever edition is installed, 'static' for stable, 'static-dev' for dev."
         }
     ],
     "execution": {
