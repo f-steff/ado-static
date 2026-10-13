@@ -45,13 +45,8 @@ jobs:
         run: npm run build:prod
       - name: Publish stable extension
         env:
-          MARKETPLACE_PAT: ${{ secrets.MARKETPLACE_PAT }}
-        run: |
-          npx tfx-cli extension publish \
-            --publisher f-steff \
-            --manifests ado-manifests/azure-devops-extension-base.json \
-            --overrides-file ado-manifests/azure-devops-extension-stable.json \
-            --token "$MARKETPLACE_PAT"
+          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
+        run: npm run publish:stable
       - name: Tag the published version
         run: |
           git config user.name "github-actions[bot]"
