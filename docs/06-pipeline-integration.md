@@ -145,11 +145,16 @@ may also come from a file:
       urlFile: '$(Build.ArtifactStagingDirectory)/link.txt'
 ```
 
-Moving data between editions - back up the stable data, then restore it into the dev edition:
+Moving data between editions - one pipeline both backs up and restores:
 
 ```yaml
+parameters:
+  - name: mode
+    default: backup
+    values: [backup, restore]
+
 steps:
-  # Backup: write the archive and attach it as a pipeline artifact named "static-backup".
+  # Snapshot first, so every run (including a restore) leaves a fresh backup artifact.
   - task: StaticAdmin@0
     displayName: 'Back up Static data'
     inputs:
@@ -157,17 +162,29 @@ steps:
       backupPath: '$(Build.ArtifactStagingDirectory)/static-backup.zip'
       artifactName: 'static-backup'
 
-  # Restore (usually a separate pipeline): download the artifact, then write it into the other edition.
-  - download: current
-    artifact: static-backup
+  # Restore downloads the newest 'static-backup' artifact produced by this same pipeline.
+  - task: DownloadPipelineArtifact@2
+    condition: eq('${{ parameters.mode }}', 'restore')
+    inputs:
+      source: specific
+      project: '$(System.TeamProject)'
+      pipeline: '$(System.DefinitionId)'
+      runVersion: latest
+      artifactName: 'static-backup'
+      targetPath: '$(Pipeline.Workspace)/static-backup'
+
   - task: StaticAdmin@0
-    displayName: 'Restore Static data into the dev edition'
+    displayName: 'Restore Static data'
+    condition: eq('${{ parameters.mode }}', 'restore')
     inputs:
       mode: restore
       backupPath: '$(Pipeline.Workspace)/static-backup/static-backup.zip'
-      extension: 'static-dev'
       dryRun: false
 ```
+
+Run it with `mode = backup` (the default) to snapshot, or `mode = restore` to put the newest backup
+back. `extension` is left at its `auto` default, so the same pipeline targets whichever edition is
+installed.
 
 ## Authentication
 

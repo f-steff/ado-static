@@ -9,6 +9,7 @@ import {
   writeProjectDocuments
 } from "../common/data-service";
 import {
+  ExportBundle,
   ProjectBundle,
   backupFileName,
   buildBundle,
@@ -318,6 +319,45 @@ async function loadStats(): Promise<void> {
 
 // Remembers the last export so a blocked download can be retried without rebuilding the archive.
 let lastBackup: { fileName: string; bytes: Uint8Array } | undefined;
+// Set once a chosen file has been read and validated; Restore applies it. Choosing a file never
+// writes anything, so a mis-click cannot replace data.
+let pendingRestore: ExportBundle | undefined;
+
+// Shown on the Backup tab: one pipeline that backs up by default and, when run with mode = restore,
+// restores the newest backup of itself (so the same definition does both directions).
+const PIPELINE_SNIPPET = [
+  "parameters:",
+  "  - name: mode",
+  "    default: backup",
+  "    values: [backup, restore]",
+  "",
+  "steps:",
+  "  # Snapshot first, so every run (including a restore) leaves a fresh backup artifact.",
+  "  - task: StaticAdmin@0",
+  "    inputs:",
+  "      mode: backup",
+  "      backupPath: '$(Build.ArtifactStagingDirectory)/static-backup.zip'",
+  "      artifactName: 'static-backup'",
+  "",
+  "  # Restore downloads the newest 'static-backup' artifact of this same pipeline.",
+  "  - task: DownloadPipelineArtifact@2",
+  "    condition: eq('${{ parameters.mode }}', 'restore')",
+  "    inputs:",
+  "      source: specific",
+  "      project: '$(System.TeamProject)'",
+  "      pipeline: '$(System.DefinitionId)'",
+  "      runVersion: latest",
+  "      artifactName: 'static-backup'",
+  "      targetPath: '$(Pipeline.Workspace)/static-backup'",
+  "",
+  "  - task: StaticAdmin@0",
+  "    condition: eq('${{ parameters.mode }}', 'restore')",
+  "    inputs:",
+  "      mode: restore",
+  "      backupPath: '$(Pipeline.Workspace)/static-backup/static-backup.zip'",
+  "      dryRun: false",
+  ""
+].join("\n");
 
 /**
  * Backup tab: download every project's Static data as a ZIP, or restore one back.
@@ -334,15 +374,17 @@ function buildBackupSection(): HTMLElement {
       "p",
       "subtitle",
       "Download a ZIP of every project's Static data (pages, links, trash and settings), or restore " +
-        "one. Restoring replaces the data of the projects the backup contains."
+        "one. Restoring replaces the data of the projects the file contains."
     )
   );
 
-  const status = el("p", "subtitle", "");
   const context = SDK.getExtensionContext();
   const host = SDK.getHost();
   const organization = host && host.name ? host.name : "";
 
+  // ---- Download -------------------------------------------------------------------------------
+  section.appendChild(el("h3", undefined, "Download a backup"));
+  const exportStatus = el("p", "subtitle", "");
   const retryButton = el("button", undefined, "Save again");
   retryButton.hidden = true;
   retryButton.addEventListener("click", () => {
@@ -356,11 +398,11 @@ function buildBackupSection(): HTMLElement {
     void (async () => {
       exportButton.disabled = true;
       retryButton.hidden = true;
-      status.textContent = "Reading projects...";
+      exportStatus.textContent = "Reading projects...";
       try {
         const bundles: ProjectBundle[] = [];
         for (const project of projects) {
-          status.textContent = `Reading ${project.name}...`;
+          exportStatus.textContent = `Reading ${project.name}...`;
           const documents = await listProjectDocuments(project.id);
           if (documents.length > 0) {
             bundles.push({ projectId: project.id, projectName: project.name, documents });
@@ -375,72 +417,132 @@ function buildBackupSection(): HTMLElement {
         const fileName = backupFileName(organization);
         lastBackup = { fileName, bytes };
         const saved = downloadBytes(fileName, bytes, "application/zip");
-        // Keep a retry available in case the sandbox blocked the download.
+        // Keep a retry visible in case the sandbox blocked the download.
         retryButton.hidden = saved;
-        status.textContent =
-          `Backup contains ${bundles.length} project(s), ${formatBytesWhole(bytes.length)}.` +
+        exportStatus.textContent =
+          `${bundles.length} project(s), ${formatBytesWhole(bytes.length)}.` +
           (saved ? "" : " The download was blocked; choose Save again.");
       } catch (error) {
-        status.textContent = `Backup failed: ${describeError(error)}`;
+        exportStatus.textContent = `Backup failed: ${describeError(error)}`;
       } finally {
         exportButton.disabled = false;
       }
     })();
   });
 
+  const exportButtons = el("div", "form-buttons");
+  exportButtons.appendChild(exportButton);
+  exportButtons.appendChild(retryButton);
+  section.appendChild(exportButtons);
+  section.appendChild(exportStatus);
+
+  // ---- Restore --------------------------------------------------------------------------------
+  section.appendChild(el("h3", undefined, "Restore from a backup"));
+  section.appendChild(
+    el(
+      "p",
+      "subtitle",
+      "Choose a ZIP produced by a backup, review what it contains, then choose Restore. The data of " +
+        "the projects in the file is replaced."
+    )
+  );
+
   const fileInput = document.createElement("input");
   fileInput.type = "file";
   fileInput.accept = ".zip,application/zip";
+  fileInput.id = "static-backup-file";
+  const fileLabel = el("label", "field-label", "Backup file (ZIP)");
+  fileLabel.htmlFor = fileInput.id;
+  const fileRow = el("div", "form-row");
+  fileRow.appendChild(fileLabel);
+  fileRow.appendChild(fileInput);
+
+  const restoreStatus = el("p", "subtitle", "");
+  // Restore is explicit: choosing a file only reads and validates it, so nothing is written until
+  // the button is pressed (and the confirmation is accepted).
+  const restoreButton = el("button", "primary", "Restore");
+  restoreButton.disabled = true;
+
   fileInput.addEventListener("change", () => {
     const file = fileInput.files && fileInput.files[0];
+    pendingRestore = undefined;
+    restoreButton.disabled = true;
     if (!file) {
+      restoreStatus.textContent = "";
       return;
     }
     void (async () => {
-      status.textContent = `Reading ${file.name}...`;
+      restoreStatus.textContent = `Reading ${file.name}...`;
       try {
         const parsed = await decodeBundle(new Uint8Array(await file.arrayBuffer()));
         if (!parsed.ok) {
-          status.textContent = parsed.error;
+          restoreStatus.textContent = parsed.error;
           return;
         }
         const known = new Set(projects.map((project) => project.id));
         const targets = parsed.bundle.projects.filter((project) => known.has(project.projectId));
-        const skipped = parsed.bundle.projects.length - targets.length;
-        const documents = targets.reduce((sum, project) => sum + project.documents.length, 0);
         if (targets.length === 0) {
-          status.textContent = "None of the projects in this backup exist in this organization.";
+          restoreStatus.textContent = "None of the projects in this backup exist in this organization.";
           return;
         }
-        const from = parsed.bundle.source.organization || "another organization";
-        const ok = await confirmDialog(
-          `Restore ${targets.length} project(s) (${documents} document(s)) from ${from}? ` +
-            "The current Static data of those projects is replaced."
-        );
-        if (!ok) {
-          status.textContent = "Restore cancelled.";
-          return;
-        }
-        for (const project of targets) {
-          status.textContent = `Restoring ${project.projectName || project.projectId}...`;
-          await writeProjectDocuments(project.projectId, project.documents, true);
-        }
-        await loadStats();
-        status.textContent =
-          `Restored ${targets.length} project(s), ${documents} document(s).` +
-          (skipped > 0 ? ` Skipped ${skipped} project(s) that no longer exist.` : "");
+        pendingRestore = parsed.bundle;
+        restoreButton.disabled = false;
+        const documents = targets.reduce((sum, project) => sum + project.documents.length, 0);
+        const from = parsed.bundle.source.organization ? ` from ${parsed.bundle.source.organization}` : "";
+        restoreStatus.textContent =
+          `${file.name}: ${targets.length} project(s), ${documents} document(s)${from}. ` +
+          "Choose Restore to apply it.";
       } catch (error) {
-        status.textContent = `Restore failed: ${describeError(error)}`;
+        restoreStatus.textContent = `Could not read that file: ${describeError(error)}`;
       }
     })();
   });
 
-  const buttons = el("div", "form-buttons");
-  buttons.appendChild(exportButton);
-  buttons.appendChild(retryButton);
-  section.appendChild(buttons);
-  section.appendChild(fileInput);
-  section.appendChild(status);
+  restoreButton.addEventListener("click", () => {
+    void (async () => {
+      const bundle = pendingRestore;
+      if (!bundle) {
+        return;
+      }
+      const known = new Set(projects.map((project) => project.id));
+      const targets = bundle.projects.filter((project) => known.has(project.projectId));
+      const documents = targets.reduce((sum, project) => sum + project.documents.length, 0);
+      const skipped = bundle.projects.length - targets.length;
+      const from = bundle.source.organization || "another organization";
+      const ok = await confirmDialog(
+        `Restore ${targets.length} project(s) (${documents} document(s)) from ${from}? ` +
+          "The current Static data of those projects is replaced."
+      );
+      if (!ok) {
+        restoreStatus.textContent = "Restore cancelled.";
+        return;
+      }
+      restoreButton.disabled = true;
+      try {
+        for (const project of targets) {
+          restoreStatus.textContent = `Restoring ${project.projectName || project.projectId}...`;
+          await writeProjectDocuments(project.projectId, project.documents, true);
+        }
+        await loadStats();
+        restoreStatus.textContent =
+          `Restored ${targets.length} project(s), ${documents} document(s).` +
+          (skipped > 0 ? ` Skipped ${skipped} project(s) that no longer exist.` : "");
+      } catch (error) {
+        restoreStatus.textContent = `Restore failed: ${describeError(error)}`;
+      } finally {
+        // The bundle is consumed either way; a re-run means choosing the file again.
+        pendingRestore = undefined;
+        fileInput.value = "";
+      }
+    })();
+  });
+
+  const restoreButtons = el("div", "form-buttons");
+  restoreButtons.appendChild(restoreButton);
+  section.appendChild(fileRow);
+  section.appendChild(restoreButtons);
+  section.appendChild(restoreStatus);
+
   section.appendChild(
     el(
       "p",
@@ -450,47 +552,25 @@ function buildBackupSection(): HTMLElement {
     )
   );
 
-  // Explain the pipeline route (docs/06): the same archive, but scriptable and schedulable. The
-  // snippets are shown rather than created, so the extension needs no write scopes and never touches
-  // a repository.
-  section.appendChild(el("h2", undefined, "Automate it in a pipeline"));
+  // ---- Pipeline -------------------------------------------------------------------------------
+  section.appendChild(el("h3", undefined, "Automate it in a pipeline"));
   section.appendChild(
     el(
       "p",
       "subtitle",
-      "The StaticAdmin@0 task does the same from a pipeline: mode: backup writes the archive and can " +
-        "attach it as a pipeline artifact, mode: restore writes an archive back. The tasks detect " +
-        "which edition is installed, so one pipeline works for both."
+      "One pipeline does both: run it with mode = backup (the default) to write the archive, or " +
+        "mode = restore to put this pipeline's newest backup back. StaticAdmin@0 detects which " +
+        "edition is installed, so the same pipeline works for the stable and dev editions."
     )
   );
-  const backupSnippet = el("pre", "code");
-  backupSnippet.textContent =
-    "steps:\n" +
-    "  - task: StaticAdmin@0\n" +
-    "    inputs:\n" +
-    "      mode: backup\n" +
-    "      backupPath: '$(Build.ArtifactStagingDirectory)/static-backup.zip'\n" +
-    "      artifactName: 'static-backup'   # attaches the archive as a pipeline artifact\n";
-  section.appendChild(backupSnippet);
-
-  const restoreSnippet = el("pre", "code");
-  restoreSnippet.textContent =
-    "steps:\n" +
-    "  - download: current\n" +
-    "    artifact: static-backup\n" +
-    "  - task: StaticAdmin@0\n" +
-    "    inputs:\n" +
-    "      mode: restore\n" +
-    "      backupPath: '$(Pipeline.Workspace)/static-backup/static-backup.zip'\n" +
-    "      dryRun: false                   # true reports the plan without writing\n";
-  section.appendChild(restoreSnippet);
-
+  const snippet = el("pre", "code");
+  snippet.textContent = PIPELINE_SNIPPET;
+  section.appendChild(snippet);
   section.appendChild(
     el("p", "hint", "Full input list and more examples: docs/06-pipeline-integration.md.")
   );
   return section;
 }
-
 /** Triggers a client-side download; returns false when the browser blocked it. */
 function downloadBytes(fileName: string, bytes: Uint8Array, type: string): boolean {
   try {

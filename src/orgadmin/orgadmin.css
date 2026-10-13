@@ -251,6 +251,24 @@ pre.code {
     max-width: 900px;
 }
 
+/* Sub-headings and the file field inside the Backup section (the section doubles as a form). */
+.section h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 18px 0 6px;
+}
+
+.form-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.field-label {
+    color: var(--text-secondary-color, #605e5c);
+}
+
 table.data-table {
     width: 100%;
     border-collapse: collapse;

@@ -116,12 +116,13 @@ page, which links back here. There is no enable/disable switch: Static is always
 (`static-backup-{organization}-{date}.zip`) holding `static-backup.json` (`format: "static-export"`,
 `schemaVersion: 2`, `source`, and a `projects` list). Pages are included **in full**, because their
 content chunks are ordinary documents in the same collection, and no document carries the
-installation-specific `__etag`. Choosing a file **restores** it: for every project in the archive
+installation-specific `__etag`. Choosing a **Backup file (ZIP)** only reads and validates it (the tab
+then shows the project/document counts and the source organization); the **Restore** button applies
+it, after a confirmation - so choosing a file never writes anything. For every project in the archive
 that still exists, its data is **replaced** by the backup's (documents the backup does not contain
-are removed); projects that no longer exist are skipped and reported. There is no copy/paste step, so
-a restore cannot be mistyped. The tab also shows the equivalent `StaticAdmin@0` pipeline snippets
-(back up to an artifact, restore from one), so the same archive can be produced and applied on a
-schedule.
+are removed); projects that no longer exist are skipped and reported. The tab also shows a single
+`StaticAdmin@0` pipeline that backs up by default and, with `mode = restore`, restores the newest
+backup of that same pipeline.
 
 Rationale: extension data is scoped per extension id, so the stable and dev editions keep separate
 stores; the archive is how an organization is copied between them (for example to seed dev with
