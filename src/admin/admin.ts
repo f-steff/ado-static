@@ -10,9 +10,11 @@ import {
   addLink,
   addPage,
   clearPage,
+  currentProjectId,
   emptyIndex,
   emptyLinks,
   getHiddenRepos,
+  listDocuments,
   purgeExpiredLinks,
   purgeExpiredTrash,
   purgeLink,
@@ -23,9 +25,11 @@ import {
   restorePage,
   setRepoHidden,
   updateLink,
-  updatePage
+  updatePage,
+  writeProjectDocuments
 } from "../common/data-service";
 import { buildAbout } from "../common/about";
+import { buildBundle, bundleFileName, parseBundle } from "../common/backup";
 import { getHeading } from "../common/branding";
 import { PipelineSummary, getBuildInfo, getBuildTimeline, getPipelineSummaries } from "../common/build-service";
 import { checkProjectUrl, describeProjectUrl } from "../common/ado-url";
@@ -115,7 +119,7 @@ logInfo("Pages admin initializing.");
 let settled = false;
 let nav: HostNavigationService | undefined;
 // Known tabs; the active tab is mirrored into the host hash so Back/Forward work.
-const ADMIN_TABS = ["links", "pages", "pipelines", "repos", "trash", "about"];
+const ADMIN_TABS = ["links", "pages", "pipelines", "repos", "backup", "trash", "about"];
 
 /** Normalizes a hash value (strips a leading '#'). */
 function normalizeTab(hash: string): string {
@@ -226,6 +230,7 @@ function render(): void {
     ["pages", "Pages", false],
     ["pipelines", "Pipelines", false],
     ["repos", "Repos", false],
+    ["backup", "Backup", false],
     ["trash", `Trash (${trashCount})`, true],
     ["about", "About", false]
   ];
@@ -294,6 +299,8 @@ function render(): void {
     content.appendChild(buildPipelinesSection());
   } else if (activeTab === "repos") {
     content.appendChild(buildReposSection());
+  } else if (activeTab === "backup") {
+    content.appendChild(buildBackupSection());
   } else if (activeTab === "about") {
     content.appendChild(buildAbout());
   } else {
@@ -308,6 +315,144 @@ function render(): void {
   page.appendChild(el("p", "version", `Static ${extensionVersion()}`));
 
   root.appendChild(page);
+}
+
+/**
+ * Backup tab: export this project's data as JSON, or import a bundle into it.
+ * Rationale: the two Marketplace editions keep separate data (it is scoped per extension id), so a
+ * portable bundle is the way to copy a project between them (for example to seed dev before a
+ * release), and it doubles as a backup. The text box is both the export output and the import input,
+ * so the feature still works when a sandboxed frame blocks downloads or the file picker.
+ */
+function buildBackupSection(): HTMLElement {
+  const section = el("div", "section");
+  section.appendChild(el("h2", undefined, "Backup and restore"));
+  section.appendChild(
+    el(
+      "p",
+      "subtitle",
+      "Export everything in this project (pages, links and settings) as JSON, or import it into " +
+        "another edition, project or organization."
+    )
+  );
+
+  const textarea = el("textarea", "backup-text");
+  textarea.rows = 6;
+  textarea.spellcheck = false;
+  textarea.placeholder = "Exported JSON appears here; paste JSON here to import.";
+
+  const status = el("p", "subtitle");
+
+  const context = SDK.getExtensionContext();
+  const webContext = SDK.getWebContext();
+  const source = {
+    publisher: (context && context.publisherId) || "",
+    extension: (context && context.extensionId) || "",
+    projectId: currentProjectId(),
+    projectName: webContext && webContext.project ? webContext.project.name : ""
+  };
+
+  const exportButton = el("button", "primary", "Export to JSON");
+  exportButton.addEventListener("click", () => {
+    void (async () => {
+      status.textContent = "Reading data...";
+      try {
+        const documents = await listDocuments();
+        const bundle = buildBundle(documents, source);
+        const json = JSON.stringify(bundle, null, 2);
+        textarea.value = json;
+        downloadText(bundleFileName(source.projectName), json);
+        status.textContent = `Exported ${documents.length} document(s).`;
+      } catch (error) {
+        status.textContent = `Export failed: ${describeError(error)}`;
+      }
+    })();
+  });
+
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "application/json,.json";
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (file) {
+      void file.text().then((content) => {
+        textarea.value = content;
+        status.textContent = `Loaded ${file.name}. Review it, then choose Import.`;
+      });
+    }
+  });
+
+  const replace = document.createElement("input");
+  replace.type = "checkbox";
+  replace.checked = true;
+  const replaceRow = el("div", "form-row");
+  replaceRow.appendChild(replace);
+  replaceRow.appendChild(
+    el("span", undefined, "Replace this project's data (remove documents not in the file)")
+  );
+
+  const importButton = el("button", "primary", "Import");
+  importButton.addEventListener("click", () => {
+    void (async () => {
+      const parsed = parseBundle(textarea.value);
+      if (!parsed.ok) {
+        status.textContent = parsed.error;
+        return;
+      }
+      const count = parsed.bundle.documents.length;
+      const from = parsed.bundle.source.projectName || "another project";
+      const mode = replace.checked
+        ? "replace this project's data with"
+        : "merge into this project's data";
+      const ok = await confirmDialog(`Import ${count} document(s) from ${from} and ${mode} it?`);
+      if (!ok) {
+        return;
+      }
+      status.textContent = "Importing...";
+      try {
+        await writeProjectDocuments(parsed.bundle.documents, replace.checked);
+        await load();
+        status.textContent = `Imported ${count} document(s).`;
+      } catch (error) {
+        status.textContent = `Import failed: ${describeError(error)}`;
+      }
+    })();
+  });
+
+  const buttons = el("div", "form-buttons");
+  buttons.appendChild(exportButton);
+  buttons.appendChild(importButton);
+
+  section.appendChild(textarea);
+  section.appendChild(fileInput);
+  section.appendChild(replaceRow);
+  section.appendChild(buttons);
+  section.appendChild(status);
+  section.appendChild(
+    el(
+      "p",
+      "hint",
+      "Exported files contain only this project's Static data (no tokens or secrets). Importing " +
+        "overwrites documents that share an id."
+    )
+  );
+  return section;
+}
+
+/** Downloads a text file client-side; failures are tolerated (the JSON stays in the text box). */
+function downloadText(fileName: string, content: string): void {
+  try {
+    const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    logInfo("download blocked; use the text box to copy the export.", error);
+  }
 }
 
 /** Global trash: pages and links merged, with a Type column. */
