@@ -52,8 +52,9 @@ name filter:
 ## Part B  -  Project settings -> Static
 
 Targets `ms.vss-web.project-admin-hub-group`; visible to project administrators. A **tabbed**
-interface: **Links**, **Pages**, **Pipelines**, **Repos**, **Trash**, **Org.Settings** (a button to
-the organization settings) and **About**. Tabs switch in-page (see [05](05-navigation-and-urls.md)).
+interface: **Links**, **Pages**, **Pipelines**, **Repos**, **Backup**, **Trash**, **Org.Settings** (a
+button to the organization settings) and **About**. Tabs switch in-page (see
+[05](05-navigation-and-urls.md)).
 
 ### Links tab
 
@@ -89,6 +90,19 @@ per-pipeline visibility and quick link creation.
 
 The project's repositories with a per-repo **hide** toggle (hidden repos are omitted from the Repos
 hub), a Link type and Create shortcut.
+
+### Backup tab
+
+**Export to JSON** writes every document in this project's collection (pages, links, trash,
+repository visibility) to a text box and downloads it as `static-{project}-{date}.json`; the file is
+a thin wrapper (`format: "static-export"`, `schemaVersion`, `source`, `documents`) so it survives
+schema additions. **Import** reads the text box (or a chosen file) and writes the documents back,
+either **merging** (default is to **replace**: documents not in the file are removed). Exported
+documents never carry the installation-specific `__etag`.
+
+Rationale: extension data is scoped per extension id, so the stable and dev editions keep separate
+stores; a bundle is how a project is copied between them (for example to seed dev with stable data
+for a tester) and doubles as a backup.
 
 ### Trash tab
 

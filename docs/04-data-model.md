@@ -158,6 +158,22 @@ can be **restored**; content documents are kept until the entry is purged.
   the entry is purged. The Trash table shows the **Permanent delete by** time (`deletedUtc` + 5
   days).
 
+## Export bundle
+
+Backup/restore (project settings -> Backup) wraps the whole collection:
+
+```jsonc
+{ "format": "static-export", "schemaVersion": 1, "exportedUtc": "...",
+  "source": { "publisher": "...", "extension": "...", "projectId": "...", "projectName": "..." },
+  "documents": [ /* every stored document, without __etag */ ] }
+```
+
+Rationale: a thin wrapper over the raw documents preserves every shape (index, links, content,
+repos) without the importer having to understand each one, and lets a project be copied between the
+editions (whose data scopes are separate). Import overwrites documents that share an id and, by
+default, removes documents the bundle does not contain. Exported documents never carry the
+installation-specific `__etag`.
+
 ## Concurrency (NFR-REL-2)
 
 The Extension Data Service does not support conditional writes (`If-Match`/`__etag` are not

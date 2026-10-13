@@ -21,6 +21,7 @@ import {
 } from "../src/common/dynamic-links";
 import { filterByName, matchesFilter } from "../src/common/filter";
 import { buildViewSpecs, composePath, consumedParams, isFixedArea, targetMatches, viewKeyForValue } from "../src/common/builder-core";
+import { buildBundle, bundleFileName, parseBundle } from "../src/common/backup";
 import { fixedUrlError, isHttpUrl, linkAreaLabel } from "../src/common/link-url";
 import { isValidPullRequestId, pullRequestWebUrl } from "../src/common/pr-url";
 import { formatBytes, formatBytesWhole, formatRelativeTime } from "../src/common/format";
@@ -713,6 +714,64 @@ test("consumedParams lists the query parameters a target encodes", () => {
         ["view", "pathAsName", "type"]
     );
     assert.deepEqual([...consumedParams("")], []);
+});
+
+test("buildBundle wraps documents and drops per-installation etags", () => {
+    const source = { publisher: "f-steff", extension: "static", projectId: "p1", projectName: "SampleProject" };
+    const original = { id: "index", kind: "index", revision: 3, __etag: "abc" };
+    const bundle = buildBundle([original], source, new Date("2026-10-13T10:00:00Z"));
+    assert.equal(bundle.format, "static-export");
+    assert.equal(bundle.schemaVersion, 1);
+    assert.equal(bundle.exportedUtc, "2026-10-13T10:00:00.000Z");
+    assert.deepEqual(bundle.source, source);
+    assert.equal(bundle.documents.length, 1);
+    // The etag is an installation-specific concurrency token and must not travel.
+    assert.equal("__etag" in bundle.documents[0], false);
+    // The input document is copied, never mutated.
+    assert.equal(original.__etag, "abc");
+});
+
+test("parseBundle accepts a valid bundle and strips carried-over etags", () => {
+    const bundle = buildBundle(
+        [{ id: "index", kind: "index", __etag: "x" }],
+        { publisher: "f-steff", extension: "static-dev", projectId: "p1", projectName: "SampleProject" },
+        new Date("2026-10-13T10:00:00Z")
+    );
+    const parsed = parseBundle(JSON.stringify({ ...bundle, documents: [{ id: "index", __etag: "stale" }] }));
+    assert.equal(parsed.ok, true);
+    if (parsed.ok) {
+        assert.equal(parsed.bundle.documents.length, 1);
+        assert.equal(parsed.bundle.source.projectName, "SampleProject");
+        assert.equal("__etag" in parsed.bundle.documents[0], false);
+    }
+});
+
+test("parseBundle defaults missing metadata instead of failing", () => {
+    const parsed = parseBundle(JSON.stringify({ format: "static-export", documents: [{ id: "links" }] }));
+    assert.equal(parsed.ok, true);
+    if (parsed.ok) {
+        assert.equal(parsed.bundle.schemaVersion, 1);
+        assert.equal(parsed.bundle.exportedUtc, "");
+        assert.equal(parsed.bundle.source.projectName, "");
+    }
+});
+
+test("parseBundle rejects malformed or foreign input", () => {
+    assert.equal(parseBundle("").ok, false);
+    assert.equal(parseBundle("not json").ok, false);
+    assert.equal(parseBundle("[]").ok, false);
+    assert.equal(parseBundle(JSON.stringify({ format: "other", documents: [] })).ok, false);
+    assert.equal(parseBundle(JSON.stringify({ format: "static-export" })).ok, false);
+    assert.equal(
+        parseBundle(JSON.stringify({ format: "static-export", documents: [{ kind: "index" }] })).ok,
+        false
+    );
+});
+
+test("bundleFileName is a safe, dated file name", () => {
+    const now = new Date("2026-10-13T10:00:00Z");
+    assert.equal(bundleFileName("My Project!", now), "static-my-project-2026-10-13.json");
+    assert.equal(bundleFileName("", now), "static-project-2026-10-13.json");
 });
 
 test("matchesFilter and filterByName are case-insensitive substring matches", () => {

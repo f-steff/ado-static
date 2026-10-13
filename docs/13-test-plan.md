@@ -473,6 +473,14 @@ Project settings -> Pages (and Links): press **View** on a row.
 **Expected:** the page viewer / link target opens in a **new browser tab** (pages: the hub viewer
 `?page=<slug>`; links: the hub bookmark, which resolves dynamic/fixed links).
 
+### TC-75  -  Backup export/import moves a project between editions  (FR-ADM, C1)
+Project settings -> Static -> **Backup**. Choose **Export to JSON**, then open the other edition
+(`static` <-> `static-dev`) in the same project, paste the JSON and choose **Import** (replace).
+**Expected:** the bundle lists this project's documents (`index`, `links`, `content-meta-*` /
+`content-*`, `repos`); after import the target edition shows exactly the same pages and links (and
+trash); no `__etag` appears in the file; invalid or foreign JSON is rejected with a clear message and
+nothing is written. (Automated: `buildBundle` / `parseBundle` / `bundleFileName`.)
+
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
 **Expected:** the table shows a **Permanent delete by** column (`deletedUtc` + 5 days). Retention is
