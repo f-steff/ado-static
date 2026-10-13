@@ -129,18 +129,18 @@ export function buildAbout(): HTMLElement {
   ]);
 
   heading("About this package");
-  // Dynamic values come from the SDK; the rest are placeholders to replace when publishing.
+  // Dynamic values come from the SDK; the rest identify the published package.
   const context = SDK.getExtensionContext();
   const host = SDK.getHost();
   const rows: Array<[string, string]> = [
     ["Package", "Static"],
-    ["Publisher", (context && context.publisherId) || "my-publisher"],
+    ["Publisher", (context && context.publisherId) || "f-steff"],
     ["Extension id", (context && context.extensionId) || "static"],
     ["Version", (context && context.version) || "0.0.0"],
-    ["Author", "Contoso (placeholder)"],
-    ["Repository", "https://github.com/contoso/static-links (placeholder)"],
-    ["Issues / support", "https://github.com/contoso/static-links/issues (placeholder)"],
-    ["License", "MIT (placeholder)"],
+    ["Author", "f-steff"],
+    ["Repository", "https://github.com/f-steff/ado-static"],
+    ["Issues / support", "https://github.com/f-steff/ado-static/issues"],
+    ["License", "MIT"],
     ["Installed for", (host && host.name) || "(unknown organization)"]
   ];
   const info = el("table", "about-table");
