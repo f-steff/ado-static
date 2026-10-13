@@ -46,15 +46,9 @@ jobs:
         run: npm run build:prod
       - name: Publish dev extension
         env:
-          MARKETPLACE_PAT: ${{ secrets.MARKETPLACE_PAT }}
-          DEV_SHARE_WITH: ${{ secrets.DEV_SHARE_WITH }}
-        run: |
-          npx tfx-cli extension publish \
-            --publisher f-steff \
-            --manifests ado-manifests/azure-devops-extension-base.json \
-            --overrides-file ado-manifests/azure-devops-extension-dev.json \
-            --share-with "$DEV_SHARE_WITH" \
-            --token "$MARKETPLACE_PAT"
+          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
+          ADO_SHARE_WITH: ${{ secrets.DEV_SHARE_WITH }}
+        run: npm run publish:dev
       - name: Tag the published version
         run: |
           git config user.name "github-actions[bot]"
