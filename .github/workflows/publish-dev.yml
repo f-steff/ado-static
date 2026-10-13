@@ -2,8 +2,8 @@ name: Publish dev
 
 # Publish the private development edition when `develop` is merged.
 # Rationale: the version is derived from git tags, then the published version is tagged. The
-# `MARKETPLACE_PAT` secret holds a Marketplace (Manage) token; `DEV_SHARE_WITH` holds the
-# organization name(s) the private edition is shared with (a secret so it is masked in logs).
+# `MARKETPLACE_PAT` secret holds a Marketplace (Manage) token. Sharing with tester organizations is
+# a separate, explicit step (`share-dev.yml`), so no organization names are stored here at all.
 on:
   push:
     branches:
@@ -47,7 +47,6 @@ jobs:
       - name: Publish dev extension
         env:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
-          ADO_SHARE_WITH: ${{ secrets.DEV_SHARE_WITH }}
         run: npm run publish:dev
       - name: Tag the published version
         run: |
