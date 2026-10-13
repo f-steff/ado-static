@@ -119,6 +119,7 @@ Versions are derived from git tags (see [README](../README.md)):
 | Base + `--overrides-file` | `scripts/tfx.js` merges the base with the chosen override; the VSIX is named `<publisher>.<id>-<version>.vsix`. |
 | `entryNames: "[name]/[name]"` mirrors the source tree | `src/hub/hub.ts` -> `dist/hub/hub.js`, so `index.html` references `./hub.js`. |
 | npm may skip install scripts | `esbuild`'s postinstall can be blocked; run `node node_modules/esbuild/install.js` if the build can't find the binary. |
+| Marketplace validation can outlast tfx's wait window | `scripts/tfx.js` treats tfx's "Validation is taking much longer than usual" as success: the upload already happened, and failing there would skip the version tag, so the next publish would be rejected with "version number must increase". |
 | Hub group + hub = top-level entry | A `ms.vss-web.hub-group` targeting `ms.vss-web.project-hub-groups-collection` plus hubs targeting it (`.static-hub-group`) is the mechanism for the **Static** group. |
 | Hub icons | Ship PNGs and reference them by relative path; inlining is used only for HTML heading icons. |
 | Pipeline tasks are packaged separately | A `ms.vss-distributed-task.task` contribution points at a task folder packaged with `addressable: false`; it is not bundled by esbuild. |
