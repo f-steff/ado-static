@@ -288,14 +288,6 @@ table.data-table td.col-nowrap {
     margin-bottom: 16px;
 }
 
-/* Export/import text box: monospace so the JSON is readable and copy/paste is predictable. */
-textarea.backup-text {
-    width: 100%;
-    box-sizing: border-box;
-    font-family: ui-monospace, Consolas, "Courier New", monospace;
-    font-size: 12px;
-}
-
 /* Invalid field: red outline applied from JS only for values the user actually entered. */
 input.invalid {
     border-color: var(--status-error-text, #a4262c);
