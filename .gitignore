@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Test build output
+dist-test/
+
+# Build output
+dist/
+
+# Packaged extensions
+*.vsix
+
+# Generated (merged) manifests from scripts/tfx.js
+ado-manifests/.generated-*.json
+
+# Local dev servers / logs
+*.log
+
+# Playwright MCP scratch output
+.playwright-mcp/
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Local sandbox repo connected to a private Azure DevOps repo (not part of this project)
+/sandbox/
