@@ -30,15 +30,33 @@ const manifestPath = buildEffectiveManifest(configName, baseManifest, overridesF
 const tfxCmd = resolveTfx(path.join(binDir, isWindows ? "tfx.ps1" : "tfx"));
 const args = buildArgs(command, manifestPath);
 
-const result = spawnSync(...buildSpawnCommand(tfxCmd, args), { stdio: "inherit", shell: false });
+// Capture output so a known-benign failure can be told apart from a real one, then re-print it so the
+// log stays exactly as the reader expects.
+const result = spawnSync(...buildSpawnCommand(tfxCmd, args), { encoding: "utf8", shell: false });
+if (result.stdout) {
+  process.stdout.write(result.stdout);
+}
+if (result.stderr) {
+  process.stderr.write(result.stderr);
+}
 
 if (result.error) {
   console.error("Unable to run tfx. Install it with: npm install -g tfx-cli");
   process.exit(1);
 }
 
+const status = result.status || 0;
+// Rationale: the Marketplace sometimes takes longer than tfx's wait window to validate an upload. The
+// publish has already succeeded at that point, so failing here would block the version tag - and
+// without the tag the next publish computes the same version and is rejected with "version number
+// must increase". Treat the wait timeout as success (the watchdog still reports a real invalid).
+if (status !== 0 && /Validation is taking much longer than usual/i.test(`${result.stdout || ""}${result.stderr || ""}`)) {
+  console.warn("Marketplace validation is still running; the upload succeeded, so this is not a failure.");
+  process.exit(0);
+}
+
 // Propagate tfx's exit code so npm reports success/failure correctly.
-process.exit(result.status || 0);
+process.exit(status);
 
 /** Reads JSON with a clear error if the file is missing or malformed. */
 function readJson(file) {
