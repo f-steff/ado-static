@@ -125,6 +125,12 @@ The task needs the extension's `{publisher}.{extension}` ids (its inputs default
 edition; dev pipelines pass `extension: static-dev`). Requires "Allow scripts to access the OAuth
 token" on the pipeline.
 
+> The data scope is per **extension id**, so the two editions keep **separate** data. Naming an
+> edition that is not installed fails with `GET ... -> 500 {"message":"TF400898: An Internal Error
+> Occurred."}` (the service answers 500, not 404, for a missing data scope); the task adds a hint
+> that names the mismatch. A report-tab-only publish (no `page`) writes a build attachment rather
+> than extension data, so it can succeed even while the page publish fails.
+
 ## Content lifecycle
 
 | Event | Effect |

@@ -480,6 +480,15 @@ enforced **lazily** (no background job): on load of the Pages hub, the Links hub
 settings admin, items trashed more than 5 days ago are permanently removed (with their content
 docs). (Automated: `trashExpiryUtc`, `expiredTrashEntries`.)
 
+### TC-74  -  Publish task names a missing edition  (FR-PUBLISH)
+Run `PublishPage@0` / `PublishLink@0` with the default `extension: static` while only `static-dev`
+is installed.
+**Expected:** the task fails with the `GET .../InstalledExtensions/f-steff/static/...` error
+(`500 TF400898`) **plus a hint** that the publisher/extension inputs must name an installed edition
+(`static` for stable, `static-dev` for dev). A report-tab-only publish (no `page`) still succeeds
+because it writes a build attachment, not extension data. (MAN: needs an org where only one edition
+is installed - verified on `Misc` with build 4595.)
+
 ## Results log
 
 ### Current version: 0.1.41 (ADO installed version confirmed)
