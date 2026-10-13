@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="256" height="256" viewBox="0 0 256 256">
+    <!-- Shared background, kept separate so the shading can change independently. -->
+    <image x="0" y="0" width="256" height="256" xlink:href="background.svg"/>
+    <g fill="none" stroke="#eaf9ff" stroke-width="16">
+        <rect x="46" y="104" width="92" height="48" rx="24"/>
+        <rect x="118" y="104" width="92" height="48" rx="24"/>
+    </g>
+</svg>
+

@@ -1,0 +1,238 @@
+/*
+ * Organization admin styles.
+ * Rationale: mirrors the project admin look (plain CSS + ADO theme variables) so both
+ * settings surfaces are visually consistent.
+ */
+body {
+    margin: 0;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    color: var(--text-primary-color, #201f1e);
+    background: var(--background-color, #ffffff);
+}
+
+.page {
+    padding: 20px 24px;
+}
+
+/* Shared tab bar (mirrors the project settings). */
+.tabs {
+    display: flex;
+    gap: 4px;
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    padding: 4px;
+    margin: 8px 0 16px;
+}
+
+.tab {
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    padding: 8px 16px;
+    font-weight: 600;
+    color: var(--text-secondary-color, #605e5c);
+}
+
+.tab:hover {
+    background: rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+}
+
+.tab.active {
+    background: var(--background-color, #ffffff);
+    border-color: rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    color: var(--text-primary-color, #201f1e);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.tab-right {
+    margin-left: auto;
+}
+
+/* Fixed layout: column widths are honoured from first paint, so values loading in do not shift
+   the table. The empty last column absorbs the remaining width on wide screens. */
+table.org-table {
+    table-layout: fixed;
+}
+
+table.org-table th.col-number {
+    width: 90px;
+    white-space: nowrap;
+}
+
+table.org-table th.col-project {
+    width: 280px;
+}
+
+table.org-table th.col-spacer {
+    width: auto;
+}
+
+/* All table headings are right-aligned except the project column. Rationale: this must outrank
+   the shared `table.data-table th { text-align: left }` rule, so it is scoped to `thead th`. */
+table.org-table thead th {
+    text-align: right;
+}
+
+table.org-table thead th.col-project {
+    text-align: left;
+}
+
+table.org-table td,
+table.org-table th {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+table.org-table td:not(.col-project) {
+    text-align: right;
+}
+
+/* About tab (shared with the project settings). */
+.help h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 18px 0 6px;
+}
+
+.help p {
+    margin: 6px 0;
+    max-width: 900px;
+}
+
+.help ul {
+    margin: 6px 0;
+    padding-left: 20px;
+    max-width: 900px;
+}
+
+.help li {
+    margin: 2px 0;
+}
+
+.help pre.code {
+    margin: 8px 0;
+    padding: 10px 12px;
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    overflow: auto;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    max-width: 900px;
+}
+
+/* Package details table on the About tab. */
+.about-table {
+    border-collapse: collapse;
+    margin: 8px 0;
+}
+
+.about-table th {
+    text-align: left;
+    font-weight: 600;
+    padding: 4px 16px 4px 0;
+    color: var(--text-secondary-color, #605e5c);
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.about-table td {
+    padding: 4px 0;
+}
+
+h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+}
+
+/* Small extension icon next to page headings. */
+.heading-icon {
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+    vertical-align: -4px;
+    border-radius: 4px;
+}
+
+.subtitle {
+    color: var(--text-secondary-color, #605e5c);
+    margin: 4px 0 16px;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+input[type="text"] {
+    padding: 6px 8px;
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 3px;
+    font: inherit;
+    min-width: 260px;
+}
+
+input[type="text"]:focus {
+    outline: 2px solid var(--focus-border-color, #0078d4);
+    outline-offset: -1px;
+}
+
+.section {
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    padding: 8px 16px;
+}
+
+table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table.data-table th,
+table.data-table td {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    vertical-align: middle;
+}
+
+table.data-table thead th {
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    font-weight: 600;
+}
+
+table.data-table tbody tr:hover {
+    background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+}
+
+.status {
+    font-size: 12px;
+    color: var(--text-secondary-color, #605e5c);
+}
+
+.enabled {
+    color: var(--status-success-foreground, #107c10);
+}
+
+.empty {
+    color: var(--text-secondary-color, #605e5c);
+    font-style: italic;
+}
+
+/* Running version, centered at the bottom (matches the hub frames). */
+.version {
+    color: var(--text-tertiary-color, #a19f9d);
+    font-size: 11px;
+    text-align: center;
+    margin: 24px 0 0;
+}
+
+.error {
+    color: var(--status-error-text, #a4262c);
+}

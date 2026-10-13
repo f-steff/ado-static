@@ -11,7 +11,7 @@ dist/
 *.vsix
 
 # Generated (merged) manifests from scripts/tfx.js
-ado-manifests/.generated-*.json
+.generated-*.json
 
 # Local dev servers / logs
 *.log
