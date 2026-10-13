@@ -92,6 +92,25 @@ export function buildAbout(): HTMLElement {
       "appear with Area 'fixed pipeline artifact'."
   );
 
+  heading("Backing up and restoring (pipeline)");
+  para(
+    "StaticAdmin@0 moves every project's Static data between editions - for example to seed the dev " +
+      "edition from the stable data before a release. It writes and reads the same ZIP archive as " +
+      "Static settings -> Backup."
+  );
+  code(
+    "- task: StaticAdmin@0\n" +
+      "  inputs:\n" +
+      "    mode: backup                                 # or restore\n" +
+      "    backupPath: $(Build.ArtifactStagingDirectory)/static-backup.zip\n" +
+      "    artifactName: static-backup                  # backup: attach the ZIP as an artifact\n"
+  );
+  para(
+    "A restore replaces each project's data with the archive's; set dryRun: true to see the plan " +
+      "without writing. For a restore, download the artifact first (DownloadPipelineArtifact) and " +
+      "pass its path as backupPath."
+  );
+
   heading("Creating links");
   para(
     "In the Links tab, give a Title and Slug, then build the URL with the cascading builder: choose " +
