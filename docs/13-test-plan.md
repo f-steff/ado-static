@@ -495,6 +495,14 @@ and sets `StaticRestoreProjects`; a dry run logs the plan and writes nothing; a 
 (for example `static` while only `static-dev` is installed) fails with the edition-mismatch hint.
 (Automated: `tests/tasks.test.js` - ZIP round-trip, CRC, stored-entry read and bundle parsing.)
 
+### TC-77  -  Tasks auto-detect the installed edition  (FR-PUBLISH)
+Run any task (`PublishPage@0`, `PublishLink@0`, `StaticAdmin@0`) **without** setting `extension`, in
+an organization with exactly one edition installed.
+**Expected:** the log says `Using Static edition '<id>'`, the pipeline variable `StaticExtension` is
+set for later steps, and the task works; with **both** editions installed it uses `static` and warns
+that the input should be pinned; with **neither** installed it fails with the install hint.
+(Automated: `autoEditionChoice` in `tests/tasks.test.js`.)
+
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
 **Expected:** the table shows a **Permanent delete by** column (`deletedUtc` + 5 days). Retention is

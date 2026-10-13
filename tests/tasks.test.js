@@ -103,3 +103,18 @@ test("withoutEtag copies rather than mutating", () => {
     assert.equal("__etag" in copy, false);
     assert.equal(document.__etag, "keep-me");
 });
+
+test("every task's 'auto' edition choice prefers the installed edition and warns when both exist", () => {
+    // Keeping the three copies identical is deliberate: the helpers are duplicated per task folder
+    // (the folders ship independently), so this asserts they share one behaviour.
+    ["PublishPage", "PublishLink", "StaticAdmin"].forEach((task) => {
+        const { autoEditionChoice } = require(`../tasks/${task}/index.js`);
+        assert.deepEqual(autoEditionChoice(false, false), { extension: "", warning: "" });
+        assert.equal(autoEditionChoice(true, false).extension, "static");
+        assert.equal(autoEditionChoice(true, false).warning, "");
+        assert.equal(autoEditionChoice(false, true).extension, "static-dev");
+        assert.equal(autoEditionChoice(false, true).warning, "");
+        assert.equal(autoEditionChoice(true, true).extension, "static");
+        assert.match(autoEditionChoice(true, true).warning, /Both Static editions/);
+    });
+});

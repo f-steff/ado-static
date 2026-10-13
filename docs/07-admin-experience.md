@@ -119,7 +119,9 @@ content chunks are ordinary documents in the same collection, and no document ca
 installation-specific `__etag`. Choosing a file **restores** it: for every project in the archive
 that still exists, its data is **replaced** by the backup's (documents the backup does not contain
 are removed); projects that no longer exist are skipped and reported. There is no copy/paste step, so
-a restore cannot be mistyped.
+a restore cannot be mistyped. The tab also shows the equivalent `StaticAdmin@0` pipeline snippets
+(back up to an artifact, restore from one), so the same archive can be produced and applied on a
+schedule.
 
 Rationale: extension data is scoped per extension id, so the stable and dev editions keep separate
 stores; the archive is how an organization is copied between them (for example to seed dev with

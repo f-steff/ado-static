@@ -238,6 +238,19 @@ button.primary:hover:not(:disabled) {
     margin: 8px 0 0;
 }
 
+/* Pipeline snippets on the Backup tab: monospace so they can be copied verbatim. */
+pre.code {
+    margin: 8px 0;
+    padding: 10px 12px;
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    overflow: auto;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    max-width: 900px;
+}
+
 table.data-table {
     width: 100%;
     border-collapse: collapse;

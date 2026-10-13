@@ -338,8 +338,18 @@ async function main() {
     const organization = organizationFromUrl(input("organizationUrl", true));
     const token = input("accessToken", true);
     const publisher = input("publisher", true, "f-steff");
-    const extension = input("extension", true, "static");
+    const requestedExtension = input("extension", true, "auto");
     const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    // The edition may be left at 'auto': probe which Marketplace edition is installed so one pipeline
+    // works unchanged in a test organization (dev) and in production (stable). The probe needs a
+    // project id, and the pipeline's own project is the natural one.
+    const extension = await resolveExtension(
+        requestedExtension,
+        organization,
+        publisher,
+        process.env.SYSTEM_TEAMPROJECTID || "",
+        headers
+    );
     const ctx = {
         organization,
         publisher,
@@ -360,6 +370,80 @@ async function main() {
     }
 }
 
-main().catch((error) => {
-    fail(`StaticAdmin failed: ${error && error.message ? error.message : error}`);
-});
+// Only run when executed as the task; requiring the file (tests) must not run main.
+if (require.main === module) {
+    main().catch((error) => {
+        fail(`StaticAdmin failed: ${error && error.message ? error.message : error}`);
+    });
+}
+
+/**
+ * Pure choice for the 'auto' edition.
+ * Rationale: exactly one installed edition wins; when both are installed the stable edition is used
+ * and a warning tells the author to pin the input; when none is installed the caller fails with the
+ * install hint. Keeping the decision pure makes it testable without a network probe.
+ */
+function autoEditionChoice(hasStatic, hasDev) {
+    if (hasStatic && hasDev) {
+        return {
+            extension: "static",
+            warning:
+                "Both Static editions are installed; using 'static'. Set the 'extension' input to pin one ('static' or 'static-dev')."
+        };
+    }
+    if (hasStatic) {
+        return { extension: "static", warning: "" };
+    }
+    if (hasDev) {
+        return { extension: "static-dev", warning: "" };
+    }
+    return { extension: "", warning: "" };
+}
+
+/** True when an edition's data scope exists (an installed but empty collection answers 404). */
+async function editionInstalled(organization, publisher, extension, projectId, headers) {
+    const url =
+        `https://extmgmt.dev.azure.com/${organization}/_apis/ExtensionManagement/InstalledExtensions/` +
+        `${publisher}/${extension}/Data/Scopes/Default/Current/Collections/static-${projectId}/Documents?api-version=3.1-preview.1`;
+    const response = await fetch(url, { headers });
+    if (response.ok || response.status === 404) {
+        return true;
+    }
+    if (response.status === 401 || response.status === 403) {
+        fail(`GET ${url} -> ${response.status}`, hintFor(response.status, ""));
+    }
+    // A missing data scope is reported as a 500 internal error (TF400898) rather than a 404.
+    return false;
+}
+
+/** Resolves the edition: an explicit input, or 'auto' (whichever edition is installed here). */
+async function resolveExtension(explicit, organization, publisher, projectId, headers) {
+    const value = (explicit || "").trim();
+    if (value && value.toLowerCase() !== "auto") {
+        return value;
+    }
+    if (!projectId) {
+        fail(
+            "Cannot auto-detect the Static edition without a project id.",
+            "Run the task inside a pipeline, or set the 'extension' input explicitly ('static' or 'static-dev')."
+        );
+    }
+    const hasStatic = await editionInstalled(organization, publisher, "static", projectId, headers);
+    const hasDev = await editionInstalled(organization, publisher, "static-dev", projectId, headers);
+    const choice = autoEditionChoice(hasStatic, hasDev);
+    if (!choice.extension) {
+        fail(
+            `Neither '${publisher}.static' nor '${publisher}.static-dev' is installed for this organization.`,
+            "Install the Static extension (Organization settings -> Extensions), or set the 'extension' input."
+        );
+    }
+    if (choice.warning) {
+        console.warn(`##vso[task.logissue type=warning]${choice.warning}`);
+    }
+    console.log(`Using Static edition '${choice.extension}'.`);
+    // Exposed so later steps (and the log reader) can see which edition was chosen.
+    console.log(`##vso[task.setvariable variable=StaticExtension]${choice.extension}`);
+    return choice.extension;
+}
+
+module.exports = { autoEditionChoice };

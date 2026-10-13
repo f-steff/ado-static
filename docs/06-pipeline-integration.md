@@ -31,7 +31,7 @@ idea.
 | `chunkSizeKb` | No | `3072` | Maximum compressed bytes per stored document. |
 | `organizationUrl` | Yes | `$(System.CollectionUri)` | Organization URL. |
 | `accessToken` | Yes | `$(System.AccessToken)` | Requires "Allow scripts to access the OAuth token". |
-| `publisher` / `extension` | Yes | `f-steff` / `static` | Extension ids (`static-dev` for the dev edition). |
+| `publisher` / `extension` | Yes | `f-steff` / `auto` | `extension`: `auto` uses whichever edition is installed, `static` is stable, `static-dev` is dev. |
 
 > `page` and `tabName` are **enablers**: set `page` to publish a Static page, set `tabName` to
 > publish a build-results report tab, or set both to publish both. With neither, the task fails with
@@ -62,7 +62,7 @@ immediately.
 | `createIfMissing` | No | `true` | Create the link when the slug does not exist. |
 | `organizationUrl` | Yes | `$(System.CollectionUri)` | Organization URL. |
 | `accessToken` | Yes | `$(System.AccessToken)` | Requires the OAuth token on the pipeline. |
-| `publisher` / `extension` | Yes | `f-steff` / `static` | Extension ids. |
+| `publisher` / `extension` | Yes | `f-steff` / `auto` | `extension`: `auto`, `static` or `static-dev`. |
 
 Published links are stored with `area: "fixed"` and `source: "pipeline"`, and `updatedBy` records
 the build number. A trashed slug is reserved (the task fails with a hint), mirroring pages.
@@ -84,7 +84,7 @@ restore cannot fail the version check.
 | `dryRun` | No | `false` | Restore only: report what would change and write nothing. |
 | `organizationUrl` | Yes | `$(System.CollectionUri)` | Organization URL. |
 | `accessToken` | Yes | `$(System.AccessToken)` | Requires the OAuth token on the pipeline. |
-| `publisher` / `extension` | Yes | `f-steff` / `static` | Extension ids (`static-dev` for the dev edition). |
+| `publisher` / `extension` | Yes | `f-steff` / `auto` | `extension`: `auto` uses whichever edition is installed, `static` is stable, `static-dev` is dev. |
 
 - **Backup** writes the archive and sets `StaticBackupProjects` / `StaticBackupDocuments`.
 - **Restore** replaces each backed-up project's data (documents the archive does not contain are
@@ -187,6 +187,23 @@ token" on the pipeline.
 > Occurred."}` (the service answers 500, not 404, for a missing data scope); the task adds a hint
 > that names the mismatch. A report-tab-only publish (no `page`) writes a build attachment rather
 > than extension data, so it can succeed even while the page publish fails.
+
+### Which edition? (`extension: auto`)
+
+All three tasks accept `extension: auto` (the default), which resolves the edition at run time: the
+task probes `static` and `static-dev` and uses the installed one, so **one pipeline works unchanged**
+in a test organization (dev) and in production (stable). Details:
+
+- If exactly one edition is installed, it is used.
+- If **both** are installed, `static` (stable) is used and the task warns; set `extension` explicitly
+  then (or bind it to a pipeline parameter, `values: [auto, static, static-dev]`).
+- If **neither** is installed, the task fails with the install hint.
+- The chosen edition is logged and exposed as the pipeline variable `StaticExtension`, so later steps
+  can react to it.
+
+> The probe reads the edition's data collection, so it needs only the scopes the tasks already use -
+> no Extension Management permission is required, and the extension never needs to write anything to
+> the organization.
 
 ## Content lifecycle
 

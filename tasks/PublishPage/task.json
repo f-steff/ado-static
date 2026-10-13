@@ -16,7 +16,7 @@
     "version": {
         "Major": 0,
         "Minor": 1,
-        "Patch": 5
+        "Patch": 6
     },
     "minimumAgentVersion": "2.144.0",
     "instanceNameFormat": "Publish Static page/tab",
@@ -83,7 +83,8 @@
             "type": "string",
             "label": "Extension id",
             "required": true,
-            "defaultValue": "static"
+            "defaultValue": "auto",
+            "helpMarkDown": "Extension id: 'auto' (default) uses whichever edition is installed, 'static' for stable, 'static-dev' for dev."
         },
         {
             "name": "chunkSizeKb",
