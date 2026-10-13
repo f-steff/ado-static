@@ -102,8 +102,10 @@ There are two Marketplace editions of the same code, under one publisher:
 | Stable | `static` | public | `main` |
 | Dev | `static-dev` | private, shared with testers | `develop` |
 
-- Merging to **`develop`** publishes the **dev** edition (private) and shares it with the
-  organizations named in the `DEV_SHARE_WITH` secret.
+- Merging to **`develop`** publishes the **dev** edition (private). Sharing it with a tester
+  organization is a separate, explicit step: run the **Share dev** workflow and give the
+  organization as an input (nothing is stored in the repository). The Marketplace retains the
+  sharing list across version publishes.
 - Merging to **`main`** publishes the **stable** edition.
 
 Versions are derived from git tags and every published version is tagged:
@@ -123,6 +125,8 @@ then.
   package the VSIX as a build artifact (no publish).
 - `.github/workflows/publish-dev.yml` - on push to `develop`: publish the dev edition.
 - `.github/workflows/publish-stable.yml` - on push to `main`: publish the stable edition.
+- `.github/workflows/share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with
+  an organization given as an input.
 
 ## Contributing
 

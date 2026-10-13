@@ -12,11 +12,12 @@ const rootDir = path.join(__dirname, "..");
 const binDir = path.join(rootDir, "node_modules", ".bin");
 const isWindows = process.platform === "win32";
 
-// Usage: node scripts/tfx.js <create|publish> <dev|stable>
+// Usage: node scripts/tfx.js <create|publish|share|unshare> <dev|stable>
+const commands = ["create", "publish", "share", "unshare"];
 const [command, configName] = process.argv.slice(2);
 
-if (!command || !configName) {
-  console.error("Usage: node scripts/tfx.js <create|publish> <dev|stable>");
+if (!command || !configName || commands.indexOf(command) < 0) {
+  console.error("Usage: node scripts/tfx.js <create|publish|share|unshare> <dev|stable>");
   process.exit(1);
 }
 
@@ -27,20 +28,7 @@ const overridesFile = path.join(rootDir, "ado-manifests", `azure-devops-extensio
 const manifestPath = buildEffectiveManifest(configName, baseManifest, overridesFile);
 
 const tfxCmd = resolveTfx(path.join(binDir, isWindows ? "tfx.ps1" : "tfx"));
-const args = ["extension", command === "create" ? "create" : "publish", "--manifests", manifestPath];
-
-// Publish-only extras come from the environment so no secrets live in the repo.
-if (command === "publish") {
-  const shareWith = process.env.ADO_SHARE_WITH;
-  if (shareWith) {
-    // Space-separated list of organizations to share the private extension with.
-    args.push("--share-with", shareWith);
-  }
-  const token = process.env.TFS_PAT;
-  if (token) {
-    args.push("--token", token);
-  }
-}
+const args = buildArgs(command, manifestPath);
 
 const result = spawnSync(...buildSpawnCommand(tfxCmd, args), { stdio: "inherit", shell: false });
 
@@ -55,6 +43,48 @@ process.exit(result.status || 0);
 /** Reads JSON with a clear error if the file is missing or malformed. */
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+/**
+ * Builds the tfx argument list for a command.
+ * Rationale: `create`/`publish` consume the merged manifest, whereas `share`/`unshare` address the
+ * extension by publisher + id. Organizations come from ADO_SHARE_ORGS / ADO_SHARE_WITH and are
+ * passed as REPEATED flags: tfx splits a single value on commas only, so a space-separated list in
+ * one quoted argument would be treated as a single (invalid) organization name.
+ */
+function buildArgs(command, manifestFile) {
+  if (command === "share" || command === "unshare") {
+    const manifest = readJson(manifestFile);
+    const flag = command === "share" ? "--share-with" : "--unshare-with";
+    const args = ["extension", command, "--publisher", manifest.publisher, "--extension-id", manifest.id];
+    const orgs = orgList(process.env.ADO_SHARE_ORGS);
+    if (orgs.length === 0) {
+      console.error("Set ADO_SHARE_ORGS to one or more organizations (comma- or space-separated).");
+      process.exit(1);
+    }
+    orgs.forEach((org) => args.push(flag, org));
+    return appendToken(args);
+  }
+  const args = ["extension", command === "create" ? "create" : "publish", "--manifests", manifestFile];
+  // Publish-only extras come from the environment so no secrets live in the repo.
+  if (command === "publish") {
+    orgList(process.env.ADO_SHARE_WITH).forEach((org) => args.push("--share-with", org));
+  }
+  return appendToken(args);
+}
+
+/** Splits a comma- or whitespace-separated organization list into trimmed, non-empty names. */
+function orgList(value) {
+  return (value || "").split(/[\s,]+/).filter(Boolean);
+}
+
+/** Appends the Marketplace token when the environment provides one. */
+function appendToken(args) {
+  const token = process.env.TFS_PAT;
+  if (token) {
+    args.push("--token", token);
+  }
+  return args;
 }
 
 /** Recursively merges plain objects; arrays and scalars from the override win. */

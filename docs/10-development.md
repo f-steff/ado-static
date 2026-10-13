@@ -13,8 +13,8 @@
 ```
 ado-static/
   ado-manifests/     # base + dev + stable manifest overrides
-  ci/                # helper scripts used by the workflows (version, publish)
-  scripts/           # build.js, serve.js, test.js, tfx.js, version.js
+  ci/                # helper scripts used by the workflows (version, identifiers)
+  scripts/           # build.js, serve.js, test.js, tfx.js
   src/
     common/          # shared helpers (data-service, urls, ado-url, link-builder, ...)
     hub/             # Pages hub (landing + sandboxed viewer)
@@ -31,7 +31,7 @@ ado-static/
   images/            # packaged PNGs + SVG sources
   docs/
   tests/logic.test.ts
-  .github/workflows/ # ci.yml, publish-dev.yml, publish-stable.yml
+  .github/workflows/ # ci.yml, publish-dev.yml, publish-stable.yml, share-dev.yml
   package.json
   tsconfig.json
   eslint.config.js
@@ -53,6 +53,8 @@ ado-static/
     "publish:dev": "node scripts/tfx.js publish dev",
     "package:stable": "node scripts/tfx.js create stable",
     "publish:stable": "node scripts/tfx.js publish stable",
+    "share:dev": "node scripts/tfx.js share dev",
+    "unshare:dev": "node scripts/tfx.js unshare dev",
     "verify:clean": "node ci/scan-identifiers.js",
     "lint": "eslint \"src/**/*.ts\""
   }
@@ -87,12 +89,13 @@ Workflows live in `.github/workflows/` (GitHub's requirement):
 
 - `ci.yml` - on pull requests and pushes: install, lint, type check, test, `verify:clean`, build,
   and upload the VSIX as a build artifact (no publish).
-- `publish-dev.yml` - on push to `develop`: publish the private dev edition and share it.
+- `publish-dev.yml` - on push to `develop`: publish the private dev edition (sharing is separate).
 - `publish-stable.yml` - on push to `main`: publish the stable edition.
+- `share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with an organization.
 
 ## Versioning
 
-Versions are derived from git tags (see [README](../README.md) and [MIGRATION](../MIGRATION.md)):
+Versions are derived from git tags (see [README](../README.md)):
 
 - Major stays `0`; **minor** bumps and the revision resets to 0 on each merge to `main`;
   **revision** bumps on each merge to `develop`.
