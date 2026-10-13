@@ -189,6 +189,55 @@ input[type="text"]:focus {
     padding: 8px 16px;
 }
 
+/* Backup tab controls. Mirrors the project settings so both surfaces look the same; `.tab` still
+   overrides the parts it sets (border, background, padding, colour). */
+button {
+    padding: 6px 12px;
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 3px;
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    cursor: pointer;
+    font: inherit;
+}
+
+button:hover {
+    background: rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+button:focus-visible {
+    outline: 2px solid var(--focus-border-color, #0078d4);
+    outline-offset: -1px;
+}
+
+/* Primary action (Download backup) uses the ADO communication colour. */
+button.primary {
+    background: var(--communication-background, #0078d4);
+    border-color: var(--communication-background, #0078d4);
+    color: var(--text-on-communication-background, #ffffff);
+}
+
+button.primary:hover:not(:disabled) {
+    filter: brightness(0.95);
+}
+
+.form-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* Always-visible guidance line. */
+.hint {
+    color: var(--text-secondary-color, #605e5c);
+    font-size: 12px;
+    margin: 8px 0 0;
+}
+
 table.data-table {
     width: 100%;
     border-collapse: collapse;

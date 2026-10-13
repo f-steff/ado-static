@@ -13,8 +13,8 @@ human-readable address.
   organization.
 - **Repos** - the project's repositories with brief all-time statistics.
 
-It also adds project settings (Links, Pages, Pipelines, Repos, Backup, Trash, About) and organization
-settings for managing the extension across projects.
+It also adds project settings (Links, Pages, Pipelines, Repos, Trash, About) and organization
+settings (Overview, Backup, About) for managing the extension across projects.
 
 ## What you can publish from a pipeline
 
