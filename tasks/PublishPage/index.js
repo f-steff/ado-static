@@ -41,16 +41,25 @@ function fail(message, hint) {
     process.exit(1);
 }
 
-/** Maps a failed HTTP status to an actionable hint. */
+/**
+ * Maps a failed HTTP status to an actionable hint.
+ * Rationale: extmgmt answers 500 (TF400898) rather than 404 when the {publisher}/{extension} data
+ * scope does not exist, which in practice almost always means the inputs name an edition that is
+ * not installed (e.g. 'static' while only 'static-dev' is installed); say so instead of failing
+ * with an opaque internal error.
+ */
 function hintFor(status, text) {
     if (status === 401 || status === 403) {
-        return "The token was rejected. Enable 'Allow scripts to access the OAuth token' on the pipeline and confirm the Pages extension is installed and shared with this organization.";
+        return "The token was rejected. Enable 'Allow scripts to access the OAuth token' on the pipeline and confirm the Static extension is installed and shared with this organization.";
     }
     if (status === 404) {
-        return "The Pages data collection was not found. Confirm the extension (publisher/extension inputs) is installed for this organization.";
+        return "The Static data collection was not found. Confirm the publisher/extension inputs name an installed edition ('static' for stable, 'static-dev' for dev) for this organization.";
     }
     if (status >= 500 && /MaximumDocumentSize|too large/i.test(text || "")) {
         return "A stored document exceeded the service limit. Lower the 'chunkSizeKb' input (e.g. 1024).";
+    }
+    if (status >= 500 && /TF400898|Internal Error/i.test(text || "")) {
+        return "Azure DevOps returned an internal error while reading the extension data. This usually means the publisher/extension inputs do not match an installed edition ('static' for stable, 'static-dev' for dev); confirm the extension is installed for this organization.";
     }
     if (/version does not match/i.test(text || "")) {
         return "Concurrent update to the same page. Re-run the pipeline; the task retries automatically.";
