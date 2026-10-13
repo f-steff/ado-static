@@ -1,7 +1,8 @@
 # 06  -  Pipeline Integration
 
 Content and links are **pipeline-only**. The supported ways to change content are the
-`PublishPage` and `PublishLink` tasks. The admin UI never accepts HTML.
+`PublishPage` and `PublishLink` tasks, and `StaticAdmin` moves a whole organization's data between
+editions. The admin UI never accepts HTML.
 
 ## Reference behaviour
 
@@ -66,6 +67,38 @@ immediately.
 Published links are stored with `area: "fixed"` and `source: "pipeline"`, and `updatedBy` records
 the build number. A trashed slug is reserved (the task fails with a hint), mirroring pages.
 
+## `StaticAdmin` task
+
+Moves a whole organization's Static data between editions (and doubles as a backup), using exactly
+the archive the organization settings UI produces: one ZIP holding `static-backup.json` with a
+`projects` list, each project carrying every document in its collection (pages, content chunks,
+links, trash, repository visibility). Documents never carry the installation-specific `__etag`, so a
+restore cannot fail the version check.
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `mode` | Yes | `backup` | `backup` reads every project's data into the ZIP; `restore` writes it back. |
+| `backupPath` | Yes |  -  | `backup`: where to write the ZIP. `restore`: the ZIP to read. |
+| `artifactName` | No | (none) | Backup only: also attach the ZIP to the build as a pipeline artifact. |
+| `projects` | No | (all) | Comma-separated project names or ids to include. |
+| `dryRun` | No | `false` | Restore only: report what would change and write nothing. |
+| `organizationUrl` | Yes | `$(System.CollectionUri)` | Organization URL. |
+| `accessToken` | Yes | `$(System.AccessToken)` | Requires the OAuth token on the pipeline. |
+| `publisher` / `extension` | Yes | `f-steff` / `static` | Extension ids (`static-dev` for the dev edition). |
+
+- **Backup** writes the archive and sets `StaticBackupProjects` / `StaticBackupDocuments`.
+- **Restore** replaces each backed-up project's data (documents the archive does not contain are
+  removed) and sets `StaticRestoreProjects`; projects that no longer exist are skipped and reported.
+- Restore reads a file, so download the artifact first (`DownloadPipelineArtifact`) and point
+  `backupPath` at it. A **dry run** is the safe way to inspect a backup before writing.
+- The archive is interchangeable with Static settings -> Backup in both directions.
+
+### Task identity
+
+- Type: `ms.vss-distributed-task.task`.
+- Id: `StaticAdmin`; pipeline alias `StaticAdmin@0` (the task's major version is 0).
+- Implementation: a dependency-free Node 20 task.
+
 ## Report tab (optional)
 
 `PublishPage` can also attach the page's HTML to the build so it appears under a **Static page** tab
@@ -110,6 +143,30 @@ may also come from a file:
       title: 'From a file'
       slug: 'from-file'
       urlFile: '$(Build.ArtifactStagingDirectory)/link.txt'
+```
+
+Moving data between editions - back up the stable data, then restore it into the dev edition:
+
+```yaml
+steps:
+  # Backup: write the archive and attach it as a pipeline artifact named "static-backup".
+  - task: StaticAdmin@0
+    displayName: 'Back up Static data'
+    inputs:
+      mode: backup
+      backupPath: '$(Build.ArtifactStagingDirectory)/static-backup.zip'
+      artifactName: 'static-backup'
+
+  # Restore (usually a separate pipeline): download the artifact, then write it into the other edition.
+  - download: current
+    artifact: static-backup
+  - task: StaticAdmin@0
+    displayName: 'Restore Static data into the dev edition'
+    inputs:
+      mode: restore
+      backupPath: '$(Pipeline.Workspace)/static-backup/static-backup.zip'
+      extension: 'static-dev'
+      dryRun: false
 ```
 
 ## Authentication

@@ -484,6 +484,17 @@ nothing is written; projects that no longer exist are skipped and reported. (Aut
 / `parseBundle` / `encodeBundle` / `decodeBundle` / `writeZip` / `readZip` / `crc32` /
 `backupFileName`.)
 
+### TC-76  -  StaticAdmin backs up and restores an organization  (FR-PUBLISH, C1)
+Run `StaticAdmin@0` with `mode: backup` and `artifactName: static-backup`; then, against the
+downloaded archive (in the other edition), `mode: restore`; then once more with `dryRun: true`.
+**Expected:** the backup writes a ZIP containing `static-backup.json` (`format: "static-export"`,
+schemaVersion 2) with one entry per project that has data, sets `StaticBackupProjects` /
+`StaticBackupDocuments`, and attaches the artifact; the restore writes the same pages and links into
+the target edition (open a page to confirm the content), replaces data the archive does not contain,
+and sets `StaticRestoreProjects`; a dry run logs the plan and writes nothing; a wrong `extension`
+(for example `static` while only `static-dev` is installed) fails with the edition-mismatch hint.
+(Automated: `tests/tasks.test.js` - ZIP round-trip, CRC, stored-entry read and bundle parsing.)
+
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
 **Expected:** the table shows a **Permanent delete by** column (`deletedUtc` + 5 days). Retention is

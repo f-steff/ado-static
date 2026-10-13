@@ -24,6 +24,9 @@ settings (Overview, Backup, About) for managing the extension across projects.
   results as a **Static page** tab.
 - **A link** - `PublishLink@0` creates or updates a named ("fixed") link. The URL can be given
   inline (`url`) or read from the first line of a file (`urlFile`).
+- **A backup / restore** - `StaticAdmin@0` reads every project's Static data into one ZIP (optionally
+  attached as a pipeline artifact) and writes it back, which is how a project's data is moved between
+  the stable and dev editions.
 
 `page` and `tabName` are independent enablers: set either or both. With neither, the task fails with
 a clear hint.

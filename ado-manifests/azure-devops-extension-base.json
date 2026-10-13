@@ -107,6 +107,11 @@
             "path": "tasks/PublishLink",
             "packagePath": "PublishLink",
             "addressable": false
+        },
+        {
+            "path": "tasks/StaticAdmin",
+            "packagePath": "StaticAdmin",
+            "addressable": false
         }
     ],
     "contributions": [
@@ -267,6 +272,17 @@
             ],
             "properties": {
                 "name": "PublishLink"
+            }
+        },
+        {
+            "id": "StaticAdmin",
+            "type": "ms.vss-distributed-task.task",
+            "description": "Backs up and restores every project's Static data.",
+            "targets": [
+                "ms.vss-distributed-task.tasks"
+            ],
+            "properties": {
+                "name": "StaticAdmin"
             }
         },
         {
