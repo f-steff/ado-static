@@ -160,19 +160,22 @@ can be **restored**; content documents are kept until the entry is purged.
 
 ## Export bundle
 
-Backup/restore (project settings -> Backup) wraps the whole collection:
+Backup/restore (organization settings -> Static -> Backup) wraps the whole organization in one ZIP
+holding `static-backup.json`:
 
 ```jsonc
-{ "format": "static-export", "schemaVersion": 1, "exportedUtc": "...",
-  "source": { "publisher": "...", "extension": "...", "projectId": "...", "projectName": "..." },
-  "documents": [ /* every stored document, without __etag */ ] }
+{ "format": "static-export", "schemaVersion": 2, "exportedUtc": "...",
+  "source": { "publisher": "...", "extension": "...", "organization": "..." },
+  "projects": [ { "projectId": "...", "projectName": "...",
+                  "documents": [ /* every stored document, without __etag */ ] } ] }
 ```
 
-Rationale: a thin wrapper over the raw documents preserves every shape (index, links, content,
-repos) without the importer having to understand each one, and lets a project be copied between the
-editions (whose data scopes are separate). Import overwrites documents that share an id and, by
-default, removes documents the bundle does not contain. Exported documents never carry the
-installation-specific `__etag`.
+Rationale: a thin wrapper over the raw documents preserves every shape (index, links, content chunks,
+repos) without the importer having to understand each one, and lets the whole organization be copied
+between the editions (whose data scopes are separate). A restore replaces each backed-up project's
+data (documents the bundle does not contain are removed). The ZIP is written with stored (not
+deflated) entries by `src/common/zip.ts`; the reader also accepts deflated entries so a re-zipped
+backup still imports. Exported documents never carry the installation-specific `__etag`.
 
 ## Concurrency (NFR-REL-2)
 

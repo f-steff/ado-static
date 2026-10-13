@@ -106,13 +106,17 @@ export function organizationName(): string {
   return host && host.name ? host.name : "";
 }
 
-/** Per-project collection name for pages. */
+/** Per-project collection name for the current project. */
 function staticCollection(): string {
-  const id = currentProjectId();
-  if (!id) {
-    throw new Error("Pages requires a project context (no project id was found).");
+  return staticCollectionFor(currentProjectId());
+}
+
+/** Per-project collection name for an explicit project id (empty ids are rejected, never shared). */
+export function staticCollectionFor(targetProjectId: string): string {
+  if (!targetProjectId) {
+    throw new Error("Static requires a project id (no project context was found).");
   }
-  return `static-${id}`;
+  return `static-${targetProjectId}`;
 }
 
 /** Base REST URL for a collection's documents. */
@@ -336,27 +340,30 @@ async function deletePageContentDocs(pageId: string): Promise<void> {
   await deleteDocumentById(`content-meta-${pageId}`);
 }
 
-/** Lists every document in the project's collection. */
-export async function listDocuments(): Promise<Array<Record<string, unknown>>> {
+/** Lists every document in one project's collection (used by the organization backup). */
+export async function listProjectDocuments(
+  targetProjectId: string
+): Promise<Array<Record<string, unknown>>> {
   try {
-    return await listCollection(staticCollection());
+    return await listCollection(staticCollectionFor(targetProjectId));
   } catch (error) {
-    logDebug("collection is empty or unreadable.", error);
+    logDebug("project collection is empty or unreadable.", { targetProjectId, error });
     return [];
   }
 }
 
 /**
- * Writes a set of documents into the project's collection (used by the import feature).
- * Rationale: import is the only writer that does not know the current server state, so it strips any
- * stale `__etag`, and with `replace` it also removes documents the bundle does not contain - that is
- * what makes "seed the dev edition from stable" land on an identical store rather than a mixture.
+ * Writes a set of documents into one project's collection (used by the organization restore).
+ * Rationale: a restore is the only writer that does not know the current server state, so it strips
+ * any stale `__etag`, and with `replace` it also removes documents the bundle does not contain - that
+ * is what makes "seed the dev edition from stable" land on an identical store rather than a mixture.
  */
 export async function writeProjectDocuments(
+  targetProjectId: string,
   documents: Array<Record<string, unknown>>,
   replace: boolean
 ): Promise<void> {
-  const collection = staticCollection();
+  const collection = staticCollectionFor(targetProjectId);
   if (replace) {
     const keep = new Set(documents.map((document) => String(document.id)));
     for (const existing of await listCollection(collection)) {

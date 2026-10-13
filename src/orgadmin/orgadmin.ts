@@ -4,9 +4,20 @@ import {
   ProjectInfo,
   ProjectStats,
   getProjectStats,
-  listProjects
+  listProjectDocuments,
+  listProjects,
+  writeProjectDocuments
 } from "../common/data-service";
+import {
+  ProjectBundle,
+  backupFileName,
+  buildBundle,
+  decodeBundle,
+  encodeBundle
+} from "../common/backup";
 import { buildAbout } from "../common/about";
+import { confirmDialog } from "../common/dialog";
+import { formatBytesWhole } from "../common/format";
 import { getHeading } from "../common/branding";
 import { pagesOrgSettingsUrl, pagesProjectSettingsUrl, extensionVersion } from "../common/extension-urls";
 import { filterByName } from "../common/filter";
@@ -28,7 +39,7 @@ let filter = "";
 let orgTab = "overview";
 let nav: HostNavigationService | undefined;
 // Known tabs; the active tab is mirrored into the host hash so Back/Forward work.
-const ORG_TABS = ["overview", "about"];
+const ORG_TABS = ["overview", "backup", "about"];
 const stats = new Map<string, ProjectStats>();
 
 SDK.init({ applyTheme: true });
@@ -124,25 +135,28 @@ function render(): void {  const root = document.getElementById("root");
     el("p", "subtitle", "Organization-wide view of Static usage across projects.")
   );
 
-  // Tabbed interface: Overview (left) and About (right) - the same layout as the project settings.
+  // Tabbed interface: Overview (left); Backup and About grouped on the right.
   const tabs = el("div", "tabs");
-  const overviewTab = el("button", "tab" + (orgTab === "overview" ? " active" : ""), "Overview");
-  overviewTab.addEventListener("click", () => {
-    orgTab = "overview";
-    navigateTab("overview");
+  const tabDefs: Array<[string, string, boolean]> = [
+    ["overview", "Overview", false],
+    ["backup", "Backup", true],
+    ["about", "About", false]
+  ];
+  tabDefs.forEach(([id, label, right]) => {
+    const button = el("button", "tab" + (orgTab === id ? " active" : "") + (right ? " tab-right" : ""), label);
+    button.addEventListener("click", () => {
+      orgTab = id;
+      navigateTab(id);
+    });
+    tabs.appendChild(button);
   });
-  tabs.appendChild(overviewTab);
-  const aboutTab = el("button", "tab tab-right" + (orgTab === "about" ? " active" : ""), "About");
-  aboutTab.addEventListener("click", () => {
-    orgTab = "about";
-    navigateTab("about");
-  });
-  tabs.appendChild(aboutTab);
   page.appendChild(tabs);
 
   const content = el("div", "tab-content");
   if (orgTab === "about") {
     content.appendChild(buildAbout());
+  } else if (orgTab === "backup") {
+    content.appendChild(buildBackupSection());
   } else {
     const toolbar = el("div", "toolbar");
     const filterInput = document.createElement("input");
@@ -188,7 +202,7 @@ function render(): void {  const root = document.getElementById("root");
   page.appendChild(el("p", "version", `Static ${extensionVersion()}`));
 
   root.appendChild(page);
-  if (orgTab !== "about") {
+  if (orgTab === "overview") {
     renderProjects();
   }
 }
@@ -300,6 +314,160 @@ async function loadStats(): Promise<void> {
     }
   };
   await Promise.all(Array.from({ length: 8 }, () => worker()));
+}
+
+// Remembers the last export so a blocked download can be retried without rebuilding the archive.
+let lastBackup: { fileName: string; bytes: Uint8Array } | undefined;
+
+/**
+ * Backup tab: download every project's Static data as a ZIP, or restore one back.
+ * Rationale: the two Marketplace editions keep separate data (it is scoped per extension id), so one
+ * portable archive is how an organization is copied between them (for example to seed the dev
+ * edition before a release) and doubles as a backup. Pages travel inside it in full, because their
+ * content chunks are ordinary documents in each project's collection.
+ */
+function buildBackupSection(): HTMLElement {
+  const section = el("div", "section");
+  section.appendChild(el("h2", undefined, "Backup and restore"));
+  section.appendChild(
+    el(
+      "p",
+      "subtitle",
+      "Download a ZIP of every project's Static data (pages, links, trash and settings), or restore " +
+        "one. Restoring replaces the data of the projects the backup contains."
+    )
+  );
+
+  const status = el("p", "subtitle", "");
+  const context = SDK.getExtensionContext();
+  const host = SDK.getHost();
+  const organization = host && host.name ? host.name : "";
+
+  const retryButton = el("button", undefined, "Save again");
+  retryButton.hidden = true;
+  retryButton.addEventListener("click", () => {
+    if (lastBackup) {
+      downloadBytes(lastBackup.fileName, lastBackup.bytes, "application/zip");
+    }
+  });
+
+  const exportButton = el("button", "primary", "Download backup");
+  exportButton.addEventListener("click", () => {
+    void (async () => {
+      exportButton.disabled = true;
+      retryButton.hidden = true;
+      status.textContent = "Reading projects...";
+      try {
+        const bundles: ProjectBundle[] = [];
+        for (const project of projects) {
+          status.textContent = `Reading ${project.name}...`;
+          const documents = await listProjectDocuments(project.id);
+          if (documents.length > 0) {
+            bundles.push({ projectId: project.id, projectName: project.name, documents });
+          }
+        }
+        const bundle = buildBundle(bundles, {
+          publisher: (context && context.publisherId) || "",
+          extension: (context && context.extensionId) || "",
+          organization
+        });
+        const bytes = encodeBundle(bundle);
+        const fileName = backupFileName(organization);
+        lastBackup = { fileName, bytes };
+        const saved = downloadBytes(fileName, bytes, "application/zip");
+        // Keep a retry available in case the sandbox blocked the download.
+        retryButton.hidden = saved;
+        status.textContent =
+          `Backup contains ${bundles.length} project(s), ${formatBytesWhole(bytes.length)}.` +
+          (saved ? "" : " The download was blocked; choose Save again.");
+      } catch (error) {
+        status.textContent = `Backup failed: ${describeError(error)}`;
+      } finally {
+        exportButton.disabled = false;
+      }
+    })();
+  });
+
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = ".zip,application/zip";
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) {
+      return;
+    }
+    void (async () => {
+      status.textContent = `Reading ${file.name}...`;
+      try {
+        const parsed = await decodeBundle(new Uint8Array(await file.arrayBuffer()));
+        if (!parsed.ok) {
+          status.textContent = parsed.error;
+          return;
+        }
+        const known = new Set(projects.map((project) => project.id));
+        const targets = parsed.bundle.projects.filter((project) => known.has(project.projectId));
+        const skipped = parsed.bundle.projects.length - targets.length;
+        const documents = targets.reduce((sum, project) => sum + project.documents.length, 0);
+        if (targets.length === 0) {
+          status.textContent = "None of the projects in this backup exist in this organization.";
+          return;
+        }
+        const from = parsed.bundle.source.organization || "another organization";
+        const ok = await confirmDialog(
+          `Restore ${targets.length} project(s) (${documents} document(s)) from ${from}? ` +
+            "The current Static data of those projects is replaced."
+        );
+        if (!ok) {
+          status.textContent = "Restore cancelled.";
+          return;
+        }
+        for (const project of targets) {
+          status.textContent = `Restoring ${project.projectName || project.projectId}...`;
+          await writeProjectDocuments(project.projectId, project.documents, true);
+        }
+        await loadStats();
+        status.textContent =
+          `Restored ${targets.length} project(s), ${documents} document(s).` +
+          (skipped > 0 ? ` Skipped ${skipped} project(s) that no longer exist.` : "");
+      } catch (error) {
+        status.textContent = `Restore failed: ${describeError(error)}`;
+      }
+    })();
+  });
+
+  const buttons = el("div", "form-buttons");
+  buttons.appendChild(exportButton);
+  buttons.appendChild(retryButton);
+  section.appendChild(buttons);
+  section.appendChild(fileInput);
+  section.appendChild(status);
+  section.appendChild(
+    el(
+      "p",
+      "hint",
+      "The backup contains only Static data (no tokens or secrets). Pages are included in full, " +
+        "because their content is stored in the same collection."
+    )
+  );
+  return section;
+}
+
+/** Triggers a client-side download; returns false when the browser blocked it. */
+function downloadBytes(fileName: string, bytes: Uint8Array, type: string): boolean {
+  try {
+    const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    return true;
+  } catch (error) {
+    logInfo("the backup download was blocked.", error);
+    return false;
+  }
 }
 
 /** Renders a fatal error in place of the UI. */

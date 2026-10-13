@@ -52,9 +52,8 @@ name filter:
 ## Part B  -  Project settings -> Static
 
 Targets `ms.vss-web.project-admin-hub-group`; visible to project administrators. A **tabbed**
-interface: **Links**, **Pages**, **Pipelines**, **Repos**, **Backup**, **Trash**, **Org.Settings** (a
-button to the organization settings) and **About**. Tabs switch in-page (see
-[05](05-navigation-and-urls.md)).
+interface: **Links**, **Pages**, **Pipelines**, **Repos**, **Trash**, **Org.Settings** (a button to
+the organization settings) and **About**. Tabs switch in-page (see [05](05-navigation-and-urls.md)).
 
 ### Links tab
 
@@ -91,19 +90,6 @@ per-pipeline visibility and quick link creation.
 The project's repositories with a per-repo **hide** toggle (hidden repos are omitted from the Repos
 hub), a Link type and Create shortcut.
 
-### Backup tab
-
-**Export to JSON** writes every document in this project's collection (pages, links, trash,
-repository visibility) to a text box and downloads it as `static-{project}-{date}.json`; the file is
-a thin wrapper (`format: "static-export"`, `schemaVersion`, `source`, `documents`) so it survives
-schema additions. **Import** reads the text box (or a chosen file) and writes the documents back,
-either **merging** (default is to **replace**: documents not in the file are removed). Exported
-documents never carry the installation-specific `__etag`.
-
-Rationale: extension data is scoped per extension id, so the stable and dev editions keep separate
-stores; a bundle is how a project is copied between them (for example to seed dev with stable data
-for a tester) and doubles as a backup.
-
 ### Trash tab
 
 A shared Trash for pages **and** links with a **Type** column, a **Deleted** column, and a
@@ -119,10 +105,25 @@ Contents are never shown or editable in settings (FR-ADM-9); only metadata.
 
 ## Part C  -  Organization settings -> Static
 
-Targets `ms.vss-web.collection-admin-hub-group`. An overview table lists the organization's
-projects with their Links, Pages, Pipelines, PRs and Repos counts (aligned right except the Project
-column). Each project links to its Static settings page, which links back here. There is no
-enable/disable switch: Static is always available.
+Targets `ms.vss-web.collection-admin-hub-group`. A **tabbed** interface: **Overview**, **Backup**,
+and **About**. The overview lists the organization's projects with their Links, Pages, Pipelines, PRs
+and Repos counts (aligned right except the Project column). Each project links to its Static settings
+page, which links back here. There is no enable/disable switch: Static is always available.
+
+### Backup tab
+
+**Download backup** reads every project's collection and saves a single ZIP
+(`static-backup-{organization}-{date}.zip`) holding `static-backup.json` (`format: "static-export"`,
+`schemaVersion: 2`, `source`, and a `projects` list). Pages are included **in full**, because their
+content chunks are ordinary documents in the same collection, and no document carries the
+installation-specific `__etag`. Choosing a file **restores** it: for every project in the archive
+that still exists, its data is **replaced** by the backup's (documents the backup does not contain
+are removed); projects that no longer exist are skipped and reported. There is no copy/paste step, so
+a restore cannot be mistyped.
+
+Rationale: extension data is scoped per extension id, so the stable and dev editions keep separate
+stores; the archive is how an organization is copied between them (for example to seed dev with
+stable data before a release) and doubles as a backup.
 
 ## Permissions
 
