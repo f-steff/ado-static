@@ -1,0 +1,99 @@
+{
+    "id": "00f3f5c5-ea29-4031-bc1d-d4a4c3c70c72",
+    "name": "StaticAdmin",
+    "friendlyName": "Static backup / restore",
+    "description": "Back up every project's Static data to one ZIP, or restore it back.",
+    "author": "f-steff",
+    "helpMarkDown": "See the Static docs: docs/06-pipeline-integration.md.",
+    "category": "Utility",
+    "visibility": [
+        "Build",
+        "Release"
+    ],
+    "runsOn": [
+        "Agent"
+    ],
+    "version": {
+        "Major": 0,
+        "Minor": 1,
+        "Patch": 0
+    },
+    "minimumAgentVersion": "2.144.0",
+    "instanceNameFormat": "Static $(mode)",
+    "inputs": [
+        {
+            "name": "mode",
+            "type": "pickList",
+            "label": "Action",
+            "required": true,
+            "defaultValue": "backup",
+            "options": {
+                "backup": "Back up to a ZIP",
+                "restore": "Restore from a ZIP"
+            },
+            "helpMarkDown": "Backup reads every selected project's Static data into one ZIP; restore writes a ZIP back (replacing each project's data)."
+        },
+        {
+            "name": "backupPath",
+            "type": "filePath",
+            "label": "ZIP file",
+            "required": true,
+            "helpMarkDown": "Backup: where to write the archive (e.g. $(Build.ArtifactStagingDirectory)/static-backup.zip). Restore: the archive to read."
+        },
+        {
+            "name": "artifactName",
+            "type": "string",
+            "label": "Artifact name (backup only)",
+            "required": false,
+            "helpMarkDown": "When set, the archive is also attached to the build as a pipeline artifact with this name."
+        },
+        {
+            "name": "projects",
+            "type": "string",
+            "label": "Projects (optional)",
+            "required": false,
+            "helpMarkDown": "Comma-separated project names or ids to include. Leave empty for every project."
+        },
+        {
+            "name": "dryRun",
+            "type": "boolean",
+            "label": "Restore: report only (no writes)",
+            "required": false,
+            "defaultValue": "false"
+        },
+        {
+            "name": "organizationUrl",
+            "type": "string",
+            "label": "Organization URL",
+            "required": true,
+            "defaultValue": "$(System.CollectionUri)"
+        },
+        {
+            "name": "accessToken",
+            "type": "string",
+            "label": "Access token",
+            "required": true,
+            "defaultValue": "$(System.AccessToken)",
+            "helpMarkDown": "Requires 'Allow scripts to access the OAuth token' on the pipeline."
+        },
+        {
+            "name": "publisher",
+            "type": "string",
+            "label": "Extension publisher",
+            "required": true,
+            "defaultValue": "f-steff"
+        },
+        {
+            "name": "extension",
+            "type": "string",
+            "label": "Extension id",
+            "required": true,
+            "defaultValue": "static"
+        }
+    ],
+    "execution": {
+        "Node20_1": {
+            "target": "index.js"
+        }
+    }
+}
