@@ -1,0 +1,31 @@
+{
+  "name": "ado-static",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bookmarkable links and a curated directory for your Azure DevOps project: pages, pipelines, pull requests and repos, always one click away.",
+  "scripts": {
+    "clean": "rimraf ./dist",
+    "build:dev": "npm run clean && node scripts/build.js --mode=development",
+    "build:prod": "npm run clean && node scripts/build.js --mode=production",
+    "serve": "node scripts/serve.js",
+    "test": "node scripts/test.js",
+    "package:dev": "node scripts/tfx.js create dev",
+    "publish:dev": "node scripts/tfx.js publish dev",
+    "package:stable": "node scripts/tfx.js create stable",
+    "publish:stable": "node scripts/tfx.js publish stable",
+    "verify:clean": "node ci/scan-identifiers.js",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "azure-devops-extension-api": "^2.0.0",
+    "azure-devops-extension-sdk": "^4.2.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.14.0",
+    "@typescript-eslint/parser": "^8.14.0",
+    "esbuild": "^0.27.2",
+    "eslint": "^9.12.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.6.0"
+  }
+}

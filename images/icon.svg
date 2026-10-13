@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="256" height="256" viewBox="0 0 256 256">
+    <!-- Shared background, kept separate so the shading can change independently. -->
+    <image x="0" y="0" width="256" height="256" xlink:href="background.svg"/>
+    <g stroke="#bfe9ff" stroke-width="11" stroke-linecap="round" opacity="0.9">
+        <line x1="26" y1="118" x2="60" y2="118"/>
+        <line x1="16" y1="150" x2="60" y2="150"/>
+        <line x1="32" y1="182" x2="60" y2="182"/>
+    </g>
+    <g transform="rotate(-12 140 150)">
+        <polygon points="140,66 202,102 140,138 78,102" fill="#e9f7ff"/>
+        <polygon points="78,102 140,138 140,212 78,176" fill="#9fdcf2"/>
+        <polygon points="140,138 202,102 202,176 140,212" fill="#5fb0d4"/>
+        <polyline points="140,66 140,138 78,102" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="2.5"/>
+    </g>
+    <g stroke="#eaf9ff" stroke-width="7" stroke-linecap="round">
+        <line x1="198" y1="46" x2="198" y2="80"/>
+        <line x1="182" y1="55" x2="214" y2="71"/>
+        <line x1="214" y1="55" x2="182" y2="71"/>
+    </g>
+</svg>
+

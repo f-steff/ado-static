@@ -1,0 +1,433 @@
+/*
+ * Admin styles.
+ *
+ * Rationale: the ADO host does not inject any stylesheet into extension iframes  -  the
+ * extension must ship its own. We reuse ADO theme variables (var(--...)) so the surface
+ * matches the host light/dark theme without pulling in a UI framework.
+ */
+body {
+    margin: 0;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    color: var(--text-primary-color, #201f1e);
+    background: var(--background-color, #ffffff);
+}
+
+.page {
+    padding: 20px 24px;
+}
+
+/* Settings tabs (Links / Pages / Repos / Trash) styled as visible tabs. */
+.tabs {
+    display: flex;
+    gap: 4px;
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    padding: 4px;
+    margin: 8px 0 16px;
+}
+
+.tab {
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    padding: 8px 16px;
+    font-weight: 600;
+    color: var(--text-secondary-color, #605e5c);
+}
+
+.tab:hover {
+    background: rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+}
+
+.tab.active {
+    background: var(--background-color, #ffffff);
+    border-color: rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    color: var(--text-primary-color, #201f1e);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* Trash sits furthest to the right. */
+.tab-right {
+    margin-left: auto;
+}
+
+/* Off-page action button (Org.Settings): styled like a button, not a tab, to signal it leaves. */
+.tab-action {
+    border: 1px solid var(--communication-background, #0078d4);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--communication-background, #0078d4);
+    padding: 8px 16px;
+    margin-left: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.tab-action:hover {
+    background: rgba(0, 120, 212, 0.08);
+}
+
+/* Running version, centered at the bottom (matches the hub frames). */
+.version {
+    color: var(--text-tertiary-color, #a19f9d);
+    font-size: 11px;
+    text-align: center;
+    margin: 24px 0 0;
+}
+
+/* Type column in the global trash. */
+.type {
+    font-size: 12px;
+    color: var(--text-secondary-color, #605e5c);
+}
+
+h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+}
+
+/* Small extension icon next to page headings. */
+.heading-icon {
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+    vertical-align: -4px;
+    border-radius: 4px;
+}
+
+h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 20px 0 8px;
+}
+
+.subtitle {
+    color: var(--text-secondary-color, #605e5c);
+    margin: 4px 0 16px;
+}
+
+/* Enablement toggle occupies a single line, above the add/edit form. */
+.enable-row {
+    margin: 0 0 16px;
+}
+
+label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Add/edit form: one labelled field per line; full width so long values are visible. */
+.form {
+    margin-bottom: 8px;
+}
+
+.form-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.form-label {
+    width: 110px;
+    flex: 0 0 auto;
+    color: var(--text-secondary-color, #605e5c);
+}
+
+.form-row input {
+    flex: 1 1 auto;
+}
+
+.form-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* Form selects (e.g. the Dynamic target) match the text inputs. */
+.form-row select {
+    flex: 1 1 auto;
+    padding: 6px 8px;
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 3px;
+    font: inherit;
+    background: var(--background-color, #ffffff);
+    color: var(--text-primary-color, #201f1e);
+}
+
+/* The per-level filter for long option lists sits after the select and stays compact. */
+.form-row .level-filter {
+    flex: 0 1 220px;
+    min-width: 120px;
+}
+
+input[type="text"] {
+    padding: 6px 8px;
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 3px;
+    font: inherit;
+}
+
+/* Disabled fields (e.g. the slug while editing) read as read-only, not editable. */
+input:disabled {
+    color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+}
+
+button {
+    padding: 6px 12px;
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 3px;
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    cursor: pointer;
+}
+
+button:hover {
+    background: rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* Primary action (Add page / Save changes) uses the ADO communication colour. */
+button.primary {
+    background: var(--communication-background, #0078d4);
+    border-color: var(--communication-background, #0078d4);
+    color: var(--text-on-communication-background, #ffffff);
+}
+
+button.primary:hover:not(:disabled) {
+    filter: brightness(0.95);
+}
+
+/* Always-visible validation/guidance line. */
+.hint {
+    color: var(--text-secondary-color, #605e5c);
+    font-size: 12px;
+    margin: 8px 0 0;
+}
+
+.hint.error {
+    color: var(--status-error-text, #a4262c);
+}
+
+table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+}
+
+table.data-table th,
+table.data-table td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    vertical-align: top;
+}
+
+table.data-table th {
+    font-weight: 600;
+}
+
+/* Keep the primary name/title (first column) and the short Area column on a single line, in every
+   settings table (Links, Pages, Repos, Trash, ...). */
+table.data-table td:first-child,
+table.data-table td.col-nowrap {
+    white-space: nowrap;
+}
+
+.row-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.mono {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+}
+
+/* URLs wrap rather than widening the table. */
+.url {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    word-break: break-all;
+    color: var(--text-secondary-color, #605e5c);
+}
+
+.empty {
+    color: var(--text-secondary-color, #605e5c);
+    font-style: italic;
+}
+
+/* Disabled page: mute only the name, never the action buttons (which stay clickable). */
+.disabled-name {
+    color: var(--text-secondary-color, #605e5c);
+}
+
+.status {
+    font-size: 12px;
+    color: var(--text-secondary-color, #605e5c);
+}
+
+.error {
+    color: var(--status-error-text, #a4262c);
+}
+
+/* Section card: gives the form and table a visible boundary (guides the eye). */
+.section {
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+/* Invalid field: red outline applied from JS only for values the user actually entered. */
+input.invalid {
+    border-color: var(--status-error-text, #a4262c);
+    box-shadow: 0 0 0 1px var(--status-error-text, #a4262c);
+}
+
+/* ADO-like table header and row hover for readability. */
+table.data-table thead th {
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    /* Headers stay on one line; data cells may wrap. */
+    white-space: nowrap;
+}
+
+/* The data row has no bottom border; the following actions row draws the separator instead. */
+tr.data-row td {
+    border-bottom: none;
+}
+
+/* Actions row under each record: spans the data columns, left-aligned. */
+tr.actions-row td {
+    text-align: left;
+    padding-top: 0;
+    padding-bottom: 10px;
+}
+
+table.data-table tbody tr:hover {
+    background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+}
+
+/* Visible focus ring for keyboard users. */
+input[type="text"]:focus,
+button:focus-visible {
+    outline: 2px solid var(--focus-border-color, #0078d4);
+    outline-offset: -1px;
+}
+
+/* Cascading link builder (Area -> ... -> a valid URL). */
+.builder {
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin: 4px 0 8px;
+    background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+}
+
+/* Inline select + button (e.g. Create Link type in the Repos tab). */
+.inline-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Help tab. */
+.help h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 18px 0 6px;
+}
+
+.help p {
+    margin: 6px 0;
+    max-width: 900px;
+}
+
+.help ul {
+    margin: 6px 0;
+    padding-left: 20px;
+    max-width: 900px;
+}
+
+.help li {
+    margin: 2px 0;
+}
+
+.help pre.code {
+    margin: 8px 0;
+    padding: 10px 12px;
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    overflow: auto;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    max-width: 900px;
+}
+
+/* Package details table on the About tab. */
+.about-table {
+    border-collapse: collapse;
+    margin: 8px 0;
+}
+
+.about-table th {
+    text-align: left;
+    font-weight: 600;
+    padding: 4px 16px 4px 0;
+    color: var(--text-secondary-color, #605e5c);
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.about-table td {
+    padding: 4px 0;
+}
+
+.inline-actions select {
+    padding: 6px 8px;
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 3px;
+    font: inherit;
+    min-width: 220px;
+}
+
+/* In-DOM confirmation dialog (this extension never uses window.confirm). */
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.dialog {
+    background: var(--background-color, #ffffff);
+    color: var(--text-primary-color, #201f1e);
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 6px;
+    padding: 16px 20px;
+    max-width: 460px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.dialog-message {
+    margin: 0 0 16px;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}

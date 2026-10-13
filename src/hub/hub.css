@@ -1,0 +1,139 @@
+/*
+ * Hub styles.
+ * Rationale: plain CSS with ADO theme variables (var(--...)) and sensible fallbacks, so the
+ * hub matches the host light/dark theme without a UI framework.
+ */
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    color: var(--text-primary-color, #201f1e);
+    background: var(--background-color, #ffffff);
+}
+
+/* Links look the same before and after visiting (no acquired purple). */
+a,
+a:visited {
+    color: #0078d4;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Landing container: readable max width and consistent padding. */
+.page {
+    padding: 20px 24px;
+}
+
+h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+}
+
+/* Small extension icon next to page headings. */
+.heading-icon {
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+    vertical-align: -4px;
+    border-radius: 4px;
+}
+
+.subtitle {
+    color: var(--text-secondary-color, #605e5c);
+    margin: 4px 0 16px;
+}
+
+/* Data table: compact rows with light separators. */
+table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table.data-table th,
+table.data-table td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    vertical-align: top;
+}
+
+table.data-table th {
+    font-weight: 600;
+}
+
+table.data-table thead th {
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+}
+
+table.data-table tbody tr:hover {
+    background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+}
+
+/* Monospace for ids/slugs so similar values are easy to compare. */
+.mono {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+}
+
+/* Empty-state text should read as guidance, not data. */
+.empty {
+    color: var(--text-secondary-color, #605e5c);
+    font-style: italic;
+}
+
+/* Running-version indicator: makes a stale/cached bundle obvious at a glance. */
+.version {
+    color: var(--text-tertiary-color, #a19f9d);
+    font-size: 11px;
+    text-align: center;
+    margin: 24px 0 0;
+}
+
+/* Layout: a slim breadcrumb bar over a full-height content frame (viewer mode), or a scrolling
+   landing page. Flex keeps the iframe filling the available space without magic numbers. */
+html,
+body {
+    height: 100%;
+}
+
+#root {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.page {
+    flex: 1 1 auto;
+    overflow: auto;
+}
+
+.crumb {
+    flex: 0 0 auto;
+    padding: 6px 24px;
+    font-size: 12px;
+    color: var(--text-secondary-color, #605e5c);
+    background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+    border-bottom: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+}
+
+.viewer {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+iframe.content {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #ffffff;
+}
+
+.error {
+    color: var(--status-error-text, #a4262c);
+}

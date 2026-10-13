@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="256" height="256" viewBox="0 0 256 256">
+    <!-- Shared background, kept separate so the shading can change independently. -->
+    <image x="0" y="0" width="256" height="256" xlink:href="background.svg"/>
+    <line x1="64" y1="128" x2="192" y2="128" stroke="#eaf9ff" stroke-width="14" stroke-linecap="round"/>
+    <g fill="#eaf9ff">
+        <circle cx="64" cy="128" r="22"/>
+        <circle cx="128" cy="128" r="22"/>
+        <circle cx="192" cy="128" r="22"/>
+    </g>
+</svg>
+

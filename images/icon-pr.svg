@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="256" height="256" viewBox="0 0 256 256">
+    <!-- Shared background, kept separate so the shading can change independently. -->
+    <image x="0" y="0" width="256" height="256" xlink:href="background.svg"/>
+    <g fill="none" stroke="#eaf9ff" stroke-width="16" stroke-linecap="round">
+        <line x1="92" y1="88" x2="92" y2="176"/>
+        <path d="M92 116 h40 a24 24 0 0 1 24 24 v36"/>
+    </g>
+    <g fill="#eaf9ff">
+        <circle cx="92" cy="68" r="20"/>
+        <circle cx="156" cy="196" r="20"/>
+    </g>
+</svg>
+
