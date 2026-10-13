@@ -1,0 +1,46 @@
+name: Share dev
+
+# Manually (un)share the private development edition with an Azure DevOps organization.
+# Rationale: the organization is a workflow input rather than a stored secret or variable, so there
+# is nothing to keep a record of; the Marketplace retains the sharing list across version publishes,
+# so this only needs running when an organization is added or removed. The `workflow_dispatch` form
+# is populated from the default branch, so until this file reaches `main` dispatch it from the CLI:
+#   gh workflow run share-dev.yml --repo f-steff/ado-static --ref develop \
+#     -f organization=<org> -f action=share
+on:
+  workflow_dispatch:
+    inputs:
+      organization:
+        description: "Azure DevOps organization to share with / unshare from"
+        required: true
+      action:
+        description: "Whether to share or unshare"
+        required: true
+        default: share
+        type: choice
+        options:
+          - share
+          - unshare
+
+# Read-only: sharing changes nothing in the repository.
+permissions:
+  contents: read
+
+jobs:
+  share:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      # The organization is passed through ADO_SHARE_ORGS; scripts/tfx.js splits it on commas or
+      # whitespace and shares/unshares the dev manifest's publisher + id.
+      - name: ${{ inputs.action }} ${{ inputs.organization }}
+        env:
+          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
+          ADO_SHARE_ORGS: ${{ inputs.organization }}
+        run: node scripts/tfx.js ${{ inputs.action }} dev

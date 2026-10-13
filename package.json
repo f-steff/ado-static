@@ -13,6 +13,8 @@
     "publish:dev": "node scripts/tfx.js publish dev",
     "package:stable": "node scripts/tfx.js create stable",
     "publish:stable": "node scripts/tfx.js publish stable",
+    "share:dev": "node scripts/tfx.js share dev",
+    "unshare:dev": "node scripts/tfx.js unshare dev",
     "verify:clean": "node ci/scan-identifiers.js",
     "lint": "eslint \"src/**/*.ts\""
   },
