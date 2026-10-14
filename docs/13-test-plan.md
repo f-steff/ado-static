@@ -506,6 +506,18 @@ set for later steps, and the task works; with **both** editions installed it use
 that the input should be pinned; with **neither** installed it fails with the install hint.
 (Automated: `autoEditionChoice` in `tests/tasks.test.js`.)
 
+### TC-78  -  The Restore flow is one visible sequence  (FR-ADM)
+Open Organization settings -> Static -> Backup and exercise the restore row (`Restore`, `Clear`,
+`Confirm restore`).
+**Expected:** before a file is chosen, `Restore` and `Clear` are inactive and `Confirm restore` is
+**hidden** (no bare confirmation buttons); choosing a usable file shows its summary above the row and
+activates `Restore` and `Clear`; `Restore` replaces the summary with the question and reveals
+`Confirm restore`; `Clear` returns to the initial state (file and summary cleared); `Confirm restore`
+performs the restore and the status line then reports `Restored N project(s), M document(s).` (or
+`Restore failed: ...`), with the row back to its initial state. (Regression found on 0.0.8: the
+confirmation was visible from the start with no question, because `[hidden]` was outranked by the
+row's `display`.)
+
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
 **Expected:** the table shows a **Permanent delete by** column (`deletedUtc` + 5 days). Retention is
@@ -520,11 +532,42 @@ is installed.
 (`500 TF400898`) **plus a hint** that the publisher/extension inputs must name an installed edition
 (`static` for stable, `static-dev` for dev). A report-tab-only publish (no `page`) still succeeds
 because it writes a build attachment, not extension data. (MAN: needs an org where only one edition
-is installed - verified on `Misc` with build 4595.)
+is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
-### Current version: 0.1.41 (ADO installed version confirmed)
+### 0.0.8 (dev edition; one organization, one project)
+
+Run on 2026-10-14 against the deployed `static-dev` 0.0.8. "pipeline" = verified through a real
+pipeline run (build ids in the evidence).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-01, TC-03 | OK | Footer `Static 0.0.8`; project settings loads with tabs Links/Pages/Pipelines/Repos/Trash (0)/About |
+| TC-36, TC-70 | OK | Links table headers: Title, Slug, Area, URL, Comment |
+| TC-51 | OK | Pages tab: "1 page(s), total content size 206 KiB." |
+| TC-73 | OK | Trash headers include "Permanent delete by" |
+| TC-45 | OK | Settings tabs switch in place and set the host hash (`#about`, `#backup`) |
+| TC-52 | OK | Each hub and settings page heading shows its own icon |
+| TC-02, TC-17, TC-18, TC-60 | OK | All five hubs render headings/subtitles/columns with no blank "Loading" row: pages (1 row, 206.3 KiB), links (empty state), pipelines (2 rows), pr (Jump + empty state), repos (8 rows) |
+| TC-14, TC-40, TC-48 | OK | Repos / PR / Pipelines hubs show their columns and live data |
+| TC-41, TC-50 | OK | Organization overview: 13 project rows, columns Project/Links/Pages/Pipelines/PRs/Repos |
+| TC-75 | OK | Backup tab: swap warning present; file field labelled "Backup file (ZIP)"; choosing a real backup shows `<file>: 1 project(s), 3 document(s) from <organization>`; Restore disabled until a file is chosen |
+| TC-78 | FAIL -> fixed | The confirmation row was visible before pressing Restore (`[hidden]` outranked by `display: flex`); fixed with `.confirm-row[hidden] { display: none }` |
+| TC-46, TC-49, TC-54, TC-63, TC-71 | OK | Parser corpus: build results (URL kept verbatim); logs with `s`/`j`/`t` (`&s={{stage}}&j={{job}}&t={{task}}`, chain `Logs: __default / Job / Publish data cache`); repository file and PR list (Repository chain, URL kept); external URL (Fixed); custom view + extra param (both kept as levels - lossless) |
+| TC-16, TC-19 | OK | `?page=<slug>` renders the stored page: its headline and controls appear in the sandboxed child frame |
+| TC-21 | OK | `?page=no-such-page-xyz` -> "No page with the slug 'no-such-page-xyz' exists in this project." |
+| TC-29 | OK | `tsc` clean, 59/59 unit tests, lint 0 errors, `verify:clean` clean |
+| TC-53 | OK | Packaged VSIX: 8 PNGs, 0 SVGs, all three task folders, `overview.md` + `LICENSE` |
+| TC-74 | OK (pipeline) | Build 4599: `extension: static` (not installed) failed with the edition-mismatch hint |
+| TC-77 | OK (pipeline) | Build 4601: no `extension` input -> `Using Static edition 'static-dev'.`, then published the page |
+| TC-76 | OK (pipeline) | Build 4605: backup wrote 38,410 bytes (1 project, 3 documents) and attached the artifact; the dry-run restore reported "would restore 1 project(s), 3 document(s); no writes were made" |
+
+Not covered by this sweep: the cross-origin iframe clicks that need a human mouse (add/edit/delete
+page and link, dialog confirmations), the report tab (TC-65, TC-68), and the destructive restore
+write path - the dry run and the UI validation path were verified instead.
+
+### Legacy: 0.1.41 (pre-migration, previous repository)
 
 Run on 2026-10-07. "MAN" = still needs a human mouse (cross-origin iframe); those are marked
 so they are not mistaken for passes. 0.1.20 added the `vso.code` scope, which required an
