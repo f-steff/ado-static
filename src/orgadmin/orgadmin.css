@@ -269,16 +269,6 @@ pre.code {
     color: var(--text-secondary-color, #605e5c);
 }
 
-/* Inline confirmation for Restore: it appears directly beneath the button that asked for it, rather
-   than as a modal at the end of the page. */
-.confirm-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin: 8px 0;
-}
-
 /* The "editions keep separate data" warning on the Backup tab. */
 .hint.error {
     color: var(--status-error-text, #a4262c);

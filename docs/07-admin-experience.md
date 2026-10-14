@@ -125,9 +125,18 @@ content chunks are ordinary documents in the same collection, and no document ca
 installation-specific `__etag`.
 
 Choosing a **Backup file (ZIP)** only reads and validates it; the summary
-(`<file>: N project(s), M document(s) from <org>`) appears between the file field and the
-**Restore** button, and the button then shows an **inline confirmation** directly beneath it (there
-is no modal) before anything is written. For every project in the archive that still exists, its data
+(`<file>: N project(s), M document(s) from <org>`) appears between the file field and the buttons.
+Restoring is then an explicit sequence on one button row - `Restore`, `Clear`, `Confirm restore`:
+
+| State | Restore | Clear | Confirm restore |
+| --- | --- | --- | --- |
+| Nothing chosen | inactive | inactive | hidden |
+| Usable file chosen | **active** | **active** | hidden |
+| `Restore` pressed | inactive | active | **shown** (the status line asks the question) |
+| `Clear` pressed | inactive | inactive | hidden - the file and summary are cleared |
+| `Confirm restore` pressed | inactive | inactive | inactive while it runs, then the status line reports the result and the row returns to its initial state |
+
+For every project in the archive that still exists, its data
 is **replaced** by the backup's (documents the backup does not contain are removed); projects that no
 longer exist are skipped and reported. The tab also shows a single `StaticAdmin@0` pipeline that
 backs up by default and, with `mode = restore`, restores the newest backup of that same pipeline.

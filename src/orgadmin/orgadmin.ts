@@ -318,9 +318,6 @@ async function loadStats(): Promise<void> {
 
 // Remembers the last export so a blocked download can be retried without rebuilding the archive.
 let lastBackup: { fileName: string; bytes: Uint8Array } | undefined;
-// Set once a chosen file has been read and validated; Restore applies it. Choosing a file never
-// writes anything, so a mis-click cannot replace data.
-let pendingRestore: ExportBundle | undefined;
 
 // Shown on the Backup tab: one pipeline that backs up by default and, when run with mode = restore,
 // restores the newest backup of itself (so the same definition does both directions).
@@ -453,8 +450,8 @@ function buildBackupSection(): HTMLElement {
     el(
       "p",
       "subtitle",
-      "Choose a ZIP produced by a backup, review what it contains, then choose Restore. The data of " +
-        "the projects in the file is replaced."
+      "Choose a ZIP produced by a backup, then choose Restore and confirm. The data of the projects " +
+        "in the file is replaced."
     )
   );
 
@@ -468,59 +465,88 @@ function buildBackupSection(): HTMLElement {
   fileRow.appendChild(fileLabel);
   fileRow.appendChild(fileInput);
 
-  // The summary of the chosen file sits between the file row and the Restore button, so the reader
-  // sees what they are about to apply immediately above the button that applies it.
+  // The status line carries the whole flow: the chosen file's summary, then the confirmation
+  // question, then the result. Keeping the question in the line (instead of a dialog) is what makes
+  // the three buttons below read as one visible sequence.
   const restoreStatus = el("p", "subtitle", "");
+
   const restoreButton = el("button", "primary", "Restore");
-  restoreButton.disabled = true;
+  const clearButton = el("button", undefined, "Clear");
+  const confirmButton = el("button", "primary", "Confirm restore");
 
-  // The confirmation is inline (not a modal) so it appears directly under the button that asked.
-  const confirmRow = el("div", "confirm-row");
-  confirmRow.hidden = true;
-  const confirmText = el("span", undefined, "");
-  const confirmYes = el("button", "primary", "Restore now");
-  const confirmNo = el("button", undefined, "Cancel");
-  confirmRow.appendChild(confirmText);
-  confirmRow.appendChild(confirmYes);
-  confirmRow.appendChild(confirmNo);
+  const restoreButtons = el("div", "form-buttons");
+  restoreButtons.appendChild(restoreButton);
+  restoreButtons.appendChild(clearButton);
+  restoreButtons.appendChild(confirmButton);
+  section.appendChild(fileRow);
+  section.appendChild(restoreStatus);
+  section.appendChild(restoreButtons);
 
-  // Targets of the confirmation currently shown (set when Restore is pressed).
+  // Flow state:
+  //   idle    - nothing chosen: Restore and Clear are inactive, Confirm restore is hidden.
+  //   error   - a file was chosen but is unusable: only Clear is active.
+  //   armed   - a usable file is chosen: Restore and Clear are active, Confirm restore is hidden.
+  //   confirm - Restore was pressed: Confirm restore appears; Clear still clears the selection.
+  //   busy    - the restore is running: every button is inactive.
+  let pendingRestore: ExportBundle | undefined;
   let confirmTargets: ProjectBundle[] = [];
+
+  const applyState = (state: "idle" | "error" | "armed" | "confirm" | "busy") => {
+    restoreButton.disabled = state !== "armed";
+    clearButton.disabled = state === "idle" || state === "busy";
+    // A plain button has no `display` rule, so `hidden` works without extra CSS.
+    confirmButton.hidden = state !== "confirm" && state !== "busy";
+    confirmButton.disabled = state === "busy";
+  };
+
+  /** Returns the section to its initial state (nothing chosen, nothing pending). */
+  const resetRestore = () => {
+    pendingRestore = undefined;
+    confirmTargets = [];
+    fileInput.value = "";
+    restoreStatus.textContent = "";
+    applyState("idle");
+  };
+
+  applyState("idle");
+  clearButton.addEventListener("click", resetRestore);
 
   fileInput.addEventListener("change", () => {
     const file = fileInput.files && fileInput.files[0];
     pendingRestore = undefined;
     confirmTargets = [];
-    confirmRow.hidden = true;
-    restoreButton.disabled = true;
     if (!file) {
-      restoreStatus.textContent = "";
+      resetRestore();
       return;
     }
+    applyState("idle");
     void (async () => {
       restoreStatus.textContent = `Reading ${file.name}...`;
       try {
         const parsed = await decodeBundle(new Uint8Array(await file.arrayBuffer()));
         if (!parsed.ok) {
           restoreStatus.textContent = parsed.error;
+          applyState("error");
           return;
         }
         const known = new Set(projects.map((project) => project.id));
         const targets = parsed.bundle.projects.filter((project) => known.has(project.projectId));
         if (targets.length === 0) {
           restoreStatus.textContent = "None of the projects in this backup exist in this organization.";
+          applyState("error");
           return;
         }
         pendingRestore = parsed.bundle;
         confirmTargets = targets;
-        restoreButton.disabled = false;
         const documents = targets.reduce((sum, project) => sum + project.documents.length, 0);
         const from = parsed.bundle.source.organization ? ` from ${parsed.bundle.source.organization}` : "";
         restoreStatus.textContent =
           `${file.name}: ${targets.length} project(s), ${documents} document(s)${from}. ` +
           "Choose Restore to apply it.";
+        applyState("armed");
       } catch (error) {
         restoreStatus.textContent = `Could not read that file: ${describeError(error)}`;
+        applyState("error");
       }
     })();
   });
@@ -531,57 +557,41 @@ function buildBackupSection(): HTMLElement {
     }
     const documents = confirmTargets.reduce((sum, project) => sum + project.documents.length, 0);
     const from = pendingRestore.source.organization || "another organization";
-    confirmText.textContent =
+    restoreStatus.textContent =
       `Replace the Static data of ${confirmTargets.length} project(s) (${documents} document(s)) ` +
-      `with the backup from ${from}?`;
-    confirmRow.hidden = false;
-    restoreButton.disabled = true;
+      `with the backup from ${from}? Choose Confirm restore to proceed.`;
+    applyState("confirm");
   });
 
-  confirmNo.addEventListener("click", () => {
-    // Cancel: keep the parsed summary so Restore can be pressed again after a change of mind.
-    confirmRow.hidden = true;
-    restoreButton.disabled = false;
-  });
-
-  confirmYes.addEventListener("click", () => {
+  confirmButton.addEventListener("click", () => {
     void (async () => {
       const bundle = pendingRestore;
       const targets = confirmTargets;
       if (!bundle || targets.length === 0) {
-        confirmRow.hidden = true;
+        resetRestore();
         return;
       }
       const documents = targets.reduce((sum, project) => sum + project.documents.length, 0);
       const skipped = bundle.projects.length - targets.length;
-      confirmRow.hidden = true;
+      applyState("busy");
       try {
         for (const project of targets) {
           restoreStatus.textContent = `Restoring ${project.projectName || project.projectId}...`;
           await writeProjectDocuments(project.projectId, project.documents, true);
         }
         await loadStats();
-        restoreStatus.textContent =
+        const result =
           `Restored ${targets.length} project(s), ${documents} document(s).` +
           (skipped > 0 ? ` Skipped ${skipped} project(s) that no longer exist.` : "");
+        // Report after resetting, so the result survives in the status line.
+        resetRestore();
+        restoreStatus.textContent = result;
       } catch (error) {
+        resetRestore();
         restoreStatus.textContent = `Restore failed: ${describeError(error)}`;
-      } finally {
-        // The bundle is consumed either way; a re-run means choosing the file again.
-        pendingRestore = undefined;
-        confirmTargets = [];
-        fileInput.value = "";
-        restoreButton.disabled = true;
       }
     })();
   });
-
-  const restoreButtons = el("div", "form-buttons");
-  restoreButtons.appendChild(restoreButton);
-  section.appendChild(fileRow);
-  section.appendChild(restoreStatus);
-  section.appendChild(restoreButtons);
-  section.appendChild(confirmRow);
 
   section.appendChild(
     el(
