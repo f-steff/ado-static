@@ -91,6 +91,10 @@ restore cannot fail the version check.
   removed) and sets `StaticRestoreProjects`; projects that no longer exist are skipped and reported.
 - Restore reads a file, so download the artifact first (`DownloadPipelineArtifact`) and point
   `backupPath` at it. A **dry run** is the safe way to inspect a backup before writing.
+- **Switching editions**: each edition keeps its own data, so the sequence is backup
+  (`mode: backup`), uninstall/install the other edition, then restore (`mode: restore`). The same
+  pipeline works throughout - the tasks resolve the edition at run time and the archive is
+  edition-agnostic.
 - The archive is interchangeable with Static settings -> Backup in both directions.
 
 ### Task identity

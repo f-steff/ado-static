@@ -17,7 +17,6 @@ import {
   encodeBundle
 } from "../common/backup";
 import { buildAbout } from "../common/about";
-import { confirmDialog } from "../common/dialog";
 import { formatBytesWhole } from "../common/format";
 import { getHeading } from "../common/branding";
 import { pagesOrgSettingsUrl, pagesProjectSettingsUrl, extensionVersion } from "../common/extension-urls";
@@ -377,6 +376,18 @@ function buildBackupSection(): HTMLElement {
         "one. Restoring replaces the data of the projects the file contains."
     )
   );
+  // Rationale: the release and development editions are separate extensions with separate data, so
+  // switching between them is not a change of view - the other edition starts from an empty project.
+  // Saying so here is the difference between a safe swap and an apparent loss of everything.
+  section.appendChild(
+    el(
+      "p",
+      "hint error",
+      "The release (static) and development (static-dev) editions keep separate data: installing " +
+        "one in place of the other starts from an empty project. Always Download a backup first, " +
+        "then install the other edition, then Restore it here (or from a pipeline, see below)."
+    )
+  );
 
   const context = SDK.getExtensionContext();
   const host = SDK.getHost();
@@ -457,15 +468,30 @@ function buildBackupSection(): HTMLElement {
   fileRow.appendChild(fileLabel);
   fileRow.appendChild(fileInput);
 
+  // The summary of the chosen file sits between the file row and the Restore button, so the reader
+  // sees what they are about to apply immediately above the button that applies it.
   const restoreStatus = el("p", "subtitle", "");
-  // Restore is explicit: choosing a file only reads and validates it, so nothing is written until
-  // the button is pressed (and the confirmation is accepted).
   const restoreButton = el("button", "primary", "Restore");
   restoreButton.disabled = true;
+
+  // The confirmation is inline (not a modal) so it appears directly under the button that asked.
+  const confirmRow = el("div", "confirm-row");
+  confirmRow.hidden = true;
+  const confirmText = el("span", undefined, "");
+  const confirmYes = el("button", "primary", "Restore now");
+  const confirmNo = el("button", undefined, "Cancel");
+  confirmRow.appendChild(confirmText);
+  confirmRow.appendChild(confirmYes);
+  confirmRow.appendChild(confirmNo);
+
+  // Targets of the confirmation currently shown (set when Restore is pressed).
+  let confirmTargets: ProjectBundle[] = [];
 
   fileInput.addEventListener("change", () => {
     const file = fileInput.files && fileInput.files[0];
     pendingRestore = undefined;
+    confirmTargets = [];
+    confirmRow.hidden = true;
     restoreButton.disabled = true;
     if (!file) {
       restoreStatus.textContent = "";
@@ -486,6 +512,7 @@ function buildBackupSection(): HTMLElement {
           return;
         }
         pendingRestore = parsed.bundle;
+        confirmTargets = targets;
         restoreButton.disabled = false;
         const documents = targets.reduce((sum, project) => sum + project.documents.length, 0);
         const from = parsed.bundle.source.organization ? ` from ${parsed.bundle.source.organization}` : "";
@@ -499,25 +526,35 @@ function buildBackupSection(): HTMLElement {
   });
 
   restoreButton.addEventListener("click", () => {
+    if (!pendingRestore || confirmTargets.length === 0) {
+      return;
+    }
+    const documents = confirmTargets.reduce((sum, project) => sum + project.documents.length, 0);
+    const from = pendingRestore.source.organization || "another organization";
+    confirmText.textContent =
+      `Replace the Static data of ${confirmTargets.length} project(s) (${documents} document(s)) ` +
+      `with the backup from ${from}?`;
+    confirmRow.hidden = false;
+    restoreButton.disabled = true;
+  });
+
+  confirmNo.addEventListener("click", () => {
+    // Cancel: keep the parsed summary so Restore can be pressed again after a change of mind.
+    confirmRow.hidden = true;
+    restoreButton.disabled = false;
+  });
+
+  confirmYes.addEventListener("click", () => {
     void (async () => {
       const bundle = pendingRestore;
-      if (!bundle) {
+      const targets = confirmTargets;
+      if (!bundle || targets.length === 0) {
+        confirmRow.hidden = true;
         return;
       }
-      const known = new Set(projects.map((project) => project.id));
-      const targets = bundle.projects.filter((project) => known.has(project.projectId));
       const documents = targets.reduce((sum, project) => sum + project.documents.length, 0);
       const skipped = bundle.projects.length - targets.length;
-      const from = bundle.source.organization || "another organization";
-      const ok = await confirmDialog(
-        `Restore ${targets.length} project(s) (${documents} document(s)) from ${from}? ` +
-          "The current Static data of those projects is replaced."
-      );
-      if (!ok) {
-        restoreStatus.textContent = "Restore cancelled.";
-        return;
-      }
-      restoreButton.disabled = true;
+      confirmRow.hidden = true;
       try {
         for (const project of targets) {
           restoreStatus.textContent = `Restoring ${project.projectName || project.projectId}...`;
@@ -532,7 +569,9 @@ function buildBackupSection(): HTMLElement {
       } finally {
         // The bundle is consumed either way; a re-run means choosing the file again.
         pendingRestore = undefined;
+        confirmTargets = [];
         fileInput.value = "";
+        restoreButton.disabled = true;
       }
     })();
   });
@@ -540,8 +579,9 @@ function buildBackupSection(): HTMLElement {
   const restoreButtons = el("div", "form-buttons");
   restoreButtons.appendChild(restoreButton);
   section.appendChild(fileRow);
-  section.appendChild(restoreButtons);
   section.appendChild(restoreStatus);
+  section.appendChild(restoreButtons);
+  section.appendChild(confirmRow);
 
   section.appendChild(
     el(
@@ -559,8 +599,8 @@ function buildBackupSection(): HTMLElement {
       "p",
       "subtitle",
       "One pipeline does both: run it with mode = backup (the default) to write the archive, or " +
-        "mode = restore to put this pipeline's newest backup back. StaticAdmin@0 detects which " +
-        "edition is installed, so the same pipeline works for the stable and dev editions."
+        "mode = restore to put this pipeline's newest backup back. The tasks detect which edition " +
+        "is installed, so the same pipeline works before and after a swap."
     )
   );
   const snippet = el("pre", "code");
