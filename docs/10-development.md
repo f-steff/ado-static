@@ -83,6 +83,22 @@ ado-static/
 3. `npm run build:dev` -> `dist/`.
 4. `npm run package:dev` -> a `.vsix` in the repo root, or publish (below) for the real edition.
 
+## Branching and releases
+
+- `develop` is the integration branch. PRs land there with a **rebase** merge (flat history), and every
+  push that can change the shipped extension publishes the dev edition.
+- `main` is the **released line**. A release **merges** `develop` into `main` (a merge commit), so
+  `main` contains every commit `develop` has, and the release tag sits on that merge commit.
+- The ruleset *Protect main and develop* requires a pull request, the status checks, no deletion and no
+  force-push - but **not** linear history. That last rule was removed deliberately: it forced GitHub's
+  rebase-merge, which rewrites the committer, so **every SHA changes** and `main` became a *parallel
+  copy* of `develop`'s history that shares only the first commit. Every later release then minted
+  another set of copies, and a release tag could never appear on `develop`.
+- Kept for context, the tags published before that fix live on different lines: `v0.1.0` on `main`, the
+  dev tags (`v0.0.x`, `v0.1.1` and later) on `develop`. A tag is only visible in a Git UI when the
+  branch containing its commit is selected - so `v0.1.0` shows under `main`, not under `develop`.
+  Releases from the fix onwards tag `main`'s merge commit, and `main` genuinely contains `develop`.
+
 ## CI
 
 Workflows live in `.github/workflows/` (GitHub's requirement):
