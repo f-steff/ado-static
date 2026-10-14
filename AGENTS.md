@@ -56,8 +56,11 @@ Before finishing any change, scan for accidental instance identifiers.
 - **Editions**: one code base, two Marketplace editions under the publisher `f-steff`: `static`
   (stable, from `main`) and `static-dev` (private, from `develop`). Manifests are the shared base plus
   `azure-devops-extension-dev.json` / `azure-devops-extension-stable.json`.
-- **Branches**: `main` (stable) and `develop` (dev). `main` is protected (PR + CI required); merge
-  `develop` -> `main` to release.
+- **Branches**: `main` (stable) and `develop` (dev). Both are protected (PR + status checks + no
+  force-push + no deletion). PRs into `develop` are rebase-merged (flat history); a release **merges**
+  `develop` into `main` with a merge commit, so `main` contains every commit `develop` has and the
+  release tag lands on that merge commit. Do **not** rebase-merge a release: it rewrites every SHA and
+  forks the history (see [`docs/10-development.md`](docs/10-development.md#branching-and-releases)).
 - **Pipelines**: only `.github/workflows/`. Reusable helper scripts live in `ci/`.
 - **Versions**: both editions share one tag sequence - a release publishes *both* at the same version,
   and a `develop` merge publishes the next revision of the released minor. See
