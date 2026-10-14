@@ -17,6 +17,7 @@ on:
       - 'README.md'
       - 'AGENTS.md'
       - 'tests/**'
+      - '.gitattributes'
       - '.github/**'
 
 # Needed to push the version tag; the branch itself stays protected.

@@ -131,8 +131,8 @@ then.
 - `.github/workflows/share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with
   an organization given as an input.
 
-Publishing is skipped when a push touches only documentation, tests or CI configuration, so such
-changes never mint a version.
+Publishing is skipped when a push touches only documentation, tests, CI configuration or repository
+housekeeping, so such changes never mint a version.
 
 ## Contributing
 
