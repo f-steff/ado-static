@@ -107,11 +107,15 @@ ado-static/
   branch containing its commit is selected - so `v0.1.0` shows under `main`, not under `develop`.
   Releases from the fix onwards tag `main`'s merge commit, and `main` genuinely contains `develop`.
 - A workflow runs the file **at the ref it was dispatched on**, and the `workflow_dispatch` UI defaults
-  to the default branch. So while `main` still carries the pre-release workflow files, a manual
-  dispatch from `main` runs those older definitions - for example `actions/checkout@v4` /
-  `actions/setup-node@v4`, which raise a Node.js 20 deprecation annotation. Pick `develop` (or
-  `--ref develop`), or sync the non-shipping workflow files to `main` with a housekeeping-only change:
-  because `.github/**` is in `paths-ignore`, that publishes nothing.
+  to the default branch. `main` carries the workflow files **of the last release**, so a manual dispatch
+  from `main` runs those definitions, without any fix that landed on `develop` since. Pick `develop`
+  (or `--ref develop`) when you need current behaviour, or release - the guard (D26) deliberately allows
+  **no** other route to `main`, so a workflow there cannot be patched without one. Two consequences:
+  a workflow may depend only on files the released branch really contains (`share-dev.yml` reads its
+  input through `ci/dispatch-input.mjs` and its report through `ci/shared-with.mjs`, and both travel in
+  the same pull request as the workflow - the missing pair is B6 in
+  [`13-test-plan.md`](13-test-plan.md)), and a report step must never be able to fail the run that
+  performed the action.
 
 ## CI
 
