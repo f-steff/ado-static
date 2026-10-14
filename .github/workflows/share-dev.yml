@@ -44,6 +44,12 @@ permissions:
 jobs:
   share:
     runs-on: ubuntu-24.04 # pinned: ubuntu-latest migrates to Ubuntu 26 in October 2026
+    # The organization is a JOB-level variable on purpose: the runner prints a step's `env:` block
+    # BEFORE the step runs, so a masking step that received it through its own `env:` would reveal the
+    # value in that header. From a job variable, the first step masks it without ever printing it, and
+    # every later step - including its env block - is redacted.
+    env:
+      ADO_SHARE_ORGS: ${{ inputs.organization }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -52,19 +58,15 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      # Mask the organization before anything can print it. The value travels only through the
-      # environment, so the script text in the log stays literal and the runner redacts the value from
-      # here on - including the output of the next step.
+      # Mask the organization before anything can print it. The script text stays literal, so the only
+      # thing registered is the mask itself.
       - name: Treat the organization as secret
-        env:
-          ORGANIZATION: ${{ inputs.organization }}
-        run: echo "::add-mask::$ORGANIZATION"
-      # The organization is passed through ADO_SHARE_ORGS; scripts/tfx.js splits it on commas or
-      # whitespace and shares/unshares the dev manifest's publisher + id.
+        run: echo "::add-mask::$ADO_SHARE_ORGS"
+      # scripts/tfx.js splits ADO_SHARE_ORGS on commas or whitespace and shares/unshares the dev
+      # manifest's publisher + id.
       - name: ${{ inputs.action }} the requested organization
         env:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
-          ADO_SHARE_ORGS: ${{ inputs.organization }}
         run: node scripts/tfx.js ${{ inputs.action }} dev
       # Report the count only: the names must not appear in a public run summary. This step never
       # fails the run (sharing has already been decided) and it reads the list with tfx directly, so
