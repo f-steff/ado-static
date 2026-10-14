@@ -44,12 +44,6 @@ permissions:
 jobs:
   share:
     runs-on: ubuntu-24.04 # pinned: ubuntu-latest migrates to Ubuntu 26 in October 2026
-    # The organization is a JOB-level variable on purpose: the runner prints a step's `env:` block
-    # BEFORE the step runs, so a masking step that received it through its own `env:` would reveal the
-    # value in that header. From a job variable, the first step masks it without ever printing it, and
-    # every later step - including its env block - is redacted.
-    env:
-      ADO_SHARE_ORGS: ${{ inputs.organization }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -58,16 +52,19 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      # Mask the organization before anything can print it. The script text stays literal, so the only
-      # thing registered is the mask itself.
+      # Mask the organization before anything can print it. The value never enters an `env:` block or
+      # the script text - ci/dispatch-input.mjs reads it from the event payload file, whose path is all
+      # the runner sees - so the only thing carrying it is the workflow command it redacts.
       - name: Treat the organization as secret
-        run: echo "::add-mask::$ADO_SHARE_ORGS"
-      # scripts/tfx.js splits ADO_SHARE_ORGS on commas or whitespace and shares/unshares the dev
-      # manifest's publisher + id.
+        run: node ci/dispatch-input.mjs organization mask
+      # tfx is handed the organization through the shell (`eval`), not through an env block, and its own
+      # output ("Sharing extension with ...", the "Shared with" list) is redacted by the mask above.
       - name: ${{ inputs.action }} the requested organization
         env:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
-        run: node scripts/tfx.js ${{ inputs.action }} dev
+        run: |
+          eval "$(node ci/dispatch-input.mjs organization export ADO_SHARE_ORGS)"
+          node scripts/tfx.js ${{ inputs.action }} dev
       # Report the count only: the names must not appear in a public run summary. This step never
       # fails the run (sharing has already been decided) and it reads the list with tfx directly, so
       # the workflow depends on nothing beyond `.github/**` and `ci/shared-with.mjs` - a branch that
