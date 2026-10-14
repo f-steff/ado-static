@@ -24,6 +24,9 @@
 | D18 | The link builder's Area is short and derived from the URL: **Repo, PR, Pipeline, Artifact, Fixed**. | OK |
 | D19 | The URL parser accepts the **project GUID** as well as the project name (some Azure DevOps URLs use the GUID). | OK |
 | D20 | Publishing runs from **GitHub Actions**; versions are derived from git tags and each published version is tagged `vX.Y.Z`. | OK |
+| D21 | Distribution targets **Azure DevOps Services (cloud) only**. On-premises Azure DevOps Server is a conscious non-goal: the packaged `extension.vsixmanifest` declares `<InstallationTarget Id="Microsoft.VisualStudio.Services.Cloud"/>` only, and every data call is cloud-fixed (`extmgmt.dev.azure.com` in the web extension and all three tasks, `dev.azure.com` in `listProjects`, and `organizationFromUrl` understands only `dev.azure.com` / `{org}.visualstudio.com`) - see the research note in [08](08-open-questions.md#research-kept-distribution-on-premises-and-vsix-artifacts). | OK |
+| D22 | Publishing tasks resolve the edition at run time: `extension: auto` (the default) uses whichever edition is installed, so one pipeline serves a test organization and production; pin `static` to force release-only publishing, which then **fails** while only the development edition is installed (that failure is the point). | OK |
+| D23 | Data is moved between the two editions with the **backup and restore** sequence (project-independent: organization settings -> Backup, or the `StaticAdmin@0` task). Each edition owns a separate data scope, so a swap starts from an empty project - always back up first, then install the other edition, then restore. | OK |
 
 ## Open questions
 
@@ -35,10 +38,45 @@
 | Q13 | Repo table performance for projects with many/large repos. | NFR-PERF-1. | Commit counts are paged with a cap and loaded progressively. |
 | Q14 | Should content ever be shared across projects? | Scope model. | No for v1. |
 | Q15 | How should **multi-file pages** be supported? | Authoring model and effort. | v1 single file; then bundle/inline at publish; then a virtual file host. See [03](03-architecture.md#multi-file-pages). |
+| Q16 | Should the **published VSIX** also be attached as a workflow artifact and/or a GitHub Release? | Consumer verification, archival, and installs on on-premises servers (D21). | Cheap as a workflow artifact on every publish; a GitHub Release only for **stable** tags is the useful part. Research kept below; not scheduled. |
 
 Resolved questions (kept for context): dynamic sidebar children (D6); path vs query and round-trip
 (D7, D8); per-document size limit = 5,244,928 bytes (D12, [04](04-data-model.md)); publisher/ids
 (D15); gzip compression is the default; `System.AccessToken` publishing works.
+
+## Research kept: distribution, on-premises and VSIX artifacts
+
+Recorded while deciding D21 and Q16; kept because it answers recurring questions.
+
+### Can a downloaded VSIX be installed by someone else?
+
+- **Cloud: practically no.** Azure DevOps Services orgs install from the Marketplace; there is no
+  per-organization VSIX upload. Only a **publisher** can upload a VSIX, and the package's identity
+  (`<Identity Publisher="f-steff">`) binds it to that publisher, so a third party cannot re-upload it
+  under their own account. Testers are therefore served the way `static-dev` works today: the
+  private edition is shared with their organization and installed from *Shared with me* (D15).
+- **On-premises: no, and that is deliberate (D21).** Three independent blockers: the packaged
+  manifest installs only on `Microsoft.VisualStudio.Services.Cloud`; all data calls are cloud-fixed
+  (`extmgmt.dev.azure.com`, `dev.azure.com`); and Azure DevOps Server uses a local extension gallery
+  rather than Marketplace sharing. Supporting it would need the Server installation target plus
+  host-derived URLs in four places (the web extension and the three tasks), plus testing on a server.
+
+So a VSIX asset is valuable for **provenance and archival**, not as a distribution channel.
+
+### Attaching the published VSIX (artifact and/or GitHub Release)
+
+| Pros | Cons |
+| --- | --- |
+| The exact bytes published are archived and hash-verifiable. | Implies support for sideloaded builds, which bypass Marketplace validation and auto-update. |
+| Gives GitHub Releases a home for per-version notes (`/releases/latest`, notifications). | Suggests on-premises support that does not exist, unless documented. |
+| A Release per **stable** version is a citable artifact for audits/enterprise review. | A Release per `develop` merge would be meaningless noise. |
+| Becomes the natural install channel if on-premises is ever supported. | The packaged VSIX is not covered by `verify:clean` (that scans the source). |
+| Nearly free: CI already builds the VSIX. | If the release job rebuilds instead of reusing the uploaded file, hashes can differ. |
+
+If it is ever implemented: attach the VSIX as a **workflow artifact on every publish** (dev and
+stable); create a **GitHub Release only for stable tags**, using the same file that was published
+(build once, reuse it) plus a `SHA256SUMS` and a note that the Marketplace is the only supported
+install path; name development assets `static-dev-<version>.vsix` and never attach them to a Release.
 
 ## Risks
 
