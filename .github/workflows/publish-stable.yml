@@ -1,42 +1,58 @@
 name: Publish stable
 
-# Publish the public stable edition when `main` is merged.
-# Rationale: the version is derived from git tags, then the published version is tagged. The
-# `MARKETPLACE_PAT` secret holds a Marketplace (Manage) token.
+# Publish the public stable edition, and the dev edition at the SAME version.
 #
-# `paths-ignore` rationale: a push whose every changed path is documentation, tests or CI
-# configuration cannot change the shipped extension, so it must not mint a release version. Note that
-# `overview.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored - and a mixed
-# push still publishes, because every path must match to skip.
+# Rationale: both editions share one tag sequence, so a release publishes both at the same version.
+# That way a tester on the dev edition is running exactly the released code on release day, and the
+# numbers line up (both 0.2.0, then dev moves to 0.2.1 as `develop` advances). The tag is pushed
+# BEFORE the dev publish: if that publish fails the sequence has still advanced, otherwise the next
+# release would compute the same version and the Marketplace would reject it.
+#
+# Visibility: GitHub evaluates `run-name` when the run is created and offers no API to rename a run
+# afterwards, so the computed version cannot appear in the run list. Instead this workflow writes a
+# summary on the run page and a commit status naming the published version, so "what happened" is
+# visible where people look.
+#
+# `paths-ignore`: a push whose every changed path is documentation, the CI/release scripts, tests, or
+# repository housekeeping cannot change the shipped extension, so it must not mint a version.
+# `overview.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored; neither is
+# `scripts/**`, because that tooling decides what goes into the package.
 on:
   push:
     branches:
       - main
     paths-ignore:
       - 'docs/**'
+      - 'ci/**'
       - 'README.md'
       - 'AGENTS.md'
       - 'tests/**'
       - '.gitattributes'
+      - '.gitignore'
       - '.github/**'
 
-# Needed to push the version tag; the branch itself stays protected.
+run-name: "Publish stable (release)"
+
+# `contents: write` pushes the version tag; `statuses: write` records the published version on the
+# commit. The branch itself stays protected.
 permissions:
   contents: write
+  statuses: write
 
-# Serialize publishes so two merges cannot compute the same version.
+# Serialize with the dev publish: the two editions share one tag sequence, so publishes must not
+# interleave. A queued run recomputes its version from the tags when it starts.
 concurrency:
-  group: publish-stable
+  group: marketplace-publish
   cancel-in-progress: false
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest migrates to Ubuntu 26 in October 2026
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # tags are the version source of truth
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
@@ -52,7 +68,8 @@ jobs:
           npm run verify:clean
       - name: Compute version
         id: version
-        run: node ci/version.mjs stable --write | tee -a "$GITHUB_OUTPUT"
+        # --write-all sets the same version in both override manifests.
+        run: node ci/version.mjs stable --write-all | tee -a "$GITHUB_OUTPUT"
       - name: Build (production)
         run: npm run build:prod
       - name: Publish stable extension
@@ -65,3 +82,38 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ steps.version.outputs.tag }}" -m "Static ${{ steps.version.outputs.version }}"
           git push origin "${{ steps.version.outputs.tag }}"
+      # The same build with the dev manifest, so the released code is testable under the dev edition
+      # and both editions carry the same version until `develop` moves on.
+      - name: Publish dev edition at the same version
+        env:
+          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
+        run: npm run publish:dev
+      # Visible outcome: the run page gets a summary, and the commit gets a status naming the version.
+      - name: Summarise what was published
+        if: always()
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          {
+            echo "## Published${VERSION:+ Static $VERSION}"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Edition | \`static\` (public) |"
+            echo "| Version | \`${VERSION:-not computed}\` |"
+            echo "| Tag | \`${{ steps.version.outputs.tag }}\` |"
+            echo "| Dev edition | published at the same version |"
+            echo "| Listing | https://marketplace.visualstudio.com/items?itemName=f-steff.static |"
+            echo "| Publisher | https://marketplace.visualstudio.com/manage/publishers/f-steff |"
+            echo ""
+            echo "The Marketplace validates the upload asynchronously; if the listing page briefly errors, retry in a minute."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Record the version on the commit
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X POST "repos/${{ github.repository }}/statuses/${{ github.sha }}" \
+            -f state=success \
+            -f context="Marketplace: static" \
+            -f description="Published Static ${{ steps.version.outputs.version }}" \
+            -f target_url="https://marketplace.visualstudio.com/items?itemName=f-steff.static"
