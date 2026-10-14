@@ -45,7 +45,7 @@ repositories. Content and links can be published straight from a pipeline.
 | **Dynamic link** | A link whose URL contains `{{dyn}}` (and optionally `{{stage}}`/`{{job}}`/`{{task}}`) and stores how to resolve it. |
 | **Area** | The builder category for a link: **Repo**, **PR**, **Pipeline**, **Artifact**, **Fixed**. |
 | **Slug** | The stable, human-readable URL segment for a page/link (`my-report`). Never a counter or hash. |
-| **Publisher task** | `PublishPage@0` (publish a page and/or a report tab) and `PublishLink@0` (publish a link). |
+| **Publisher task** | `PublishPage@0` (publish a page and/or a report tab), `PublishLink@0` (publish a link) and `StaticAdmin@0` (back up/restore a whole organization). |
 | **Extension Data Service** | Azure DevOps storage for extension settings and documents (the content store). |
 | **Hub group** | A top-level section of the project sidebar (Overview, Repos, Pipelines, Static, ...). |
 | **Tab / Pivot** | A tab strip inside a hub or settings page, switched in-page (instant, with real Back). |

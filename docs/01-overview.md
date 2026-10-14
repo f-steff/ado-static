@@ -43,6 +43,7 @@ re-resolve to the latest build, the newest open pull request, or the tip of a br
 - Rendering Markdown (use Wiki).
 - Editing HTML in the browser (content is pipeline-owned).
 - Cross-project or organization-wide publishing (project-scoped by design).
+- On-premises **Azure DevOps Server**: distribution targets Azure DevOps Services (cloud) only (D21).
 - A general-purpose content management system; this is deliberately narrow.
 
 ## Personas
@@ -60,7 +61,8 @@ re-resolve to the latest build, the newest open pull request, or the tip of a br
   *dynamic* (re-resolved at open).
 - **Content store**: Azure DevOps **Extension Data Service**, project-scoped (the
   `static-{projectId}` collection).
-- **Publisher tasks**: `PublishPage@0` (a page and/or a report tab) and `PublishLink@0` (a link).
+- **Publisher tasks**: `PublishPage@0` (a page and/or a report tab), `PublishLink@0` (a link) and
+  `StaticAdmin@0` (back up or restore every project's data, used to move between editions).
 - **Hub group**: **Static**, containing the hubs Links, Pages, Pipelines, PR and Repos.
 
 ## High-level flow
