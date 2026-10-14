@@ -89,9 +89,27 @@ Workflows live in `.github/workflows/` (GitHub's requirement):
 
 - `ci.yml` - on pull requests and pushes: install, lint, type check, test, `verify:clean`, build,
   and upload the VSIX as a build artifact (no publish).
-- `publish-dev.yml` - on push to `develop`: publish the private dev edition (sharing is separate).
-- `publish-stable.yml` - on push to `main`: publish the stable edition.
-- `share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with an organization.
+- `publish-dev.yml` - on push to `develop`, or manually with an optional `version`: publish the
+  private dev edition at the next revision of the released minor.
+- `publish-stable.yml` - on push to `main`: publish the stable edition **and** the dev edition at the
+  same version.
+- `share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with an organization and
+  report the resulting access list.
+
+### Seeing what a run did
+
+GitHub evaluates `run-name` when a run is created and offers **no API to rename a run**, so a version
+computed inside the job cannot appear in the Actions list. The workflows compensate:
+
+- `run-name` gives the list a meaningful title (`Publish dev 0.1.2` for a manual run,
+  `Publish stable (release)` otherwise).
+- Each publish writes a **job summary** (shown on the run page) naming the edition, version, tag and
+  listing URL.
+- Each publish records a **commit status** (`Marketplace: static` / `Marketplace: static-dev`) whose
+  description is `Published Static 0.1.0`, so the commit itself records what was released.
+- `share-dev.yml` reads the access list **back from the Marketplace** (`tfx extension show`, whose
+  `sharedWith` array names the organizations) and reports it in the summary - the extension keeps no
+  copy of that list, and the UI equivalent is the publisher page.
 
 A publish is skipped when **every** changed path in the push is documentation, the CI/release
 scripts (`ci/**`), tests, or repository housekeeping (`paths-ignore`) - such a push cannot change the

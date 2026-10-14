@@ -130,12 +130,15 @@ then.
 - `.github/workflows/ci.yml` - on pull requests and pushes: install, lint, type check, test, and
   package the VSIX as a build artifact (no publish).
 - `.github/workflows/publish-dev.yml` - on push to `develop`: publish the dev edition.
-- `.github/workflows/publish-stable.yml` - on push to `main`: publish the stable edition.
+- `.github/workflows/publish-stable.yml` - on push to `main`: publish the stable edition, and the dev
+  edition at the same version.
 - `.github/workflows/share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with
-  an organization given as an input.
+  an organization given as an input, and report who currently has access.
 
-Publishing is skipped when a push touches only documentation, tests, CI configuration or repository
-housekeeping, so such changes never mint a version.
+Publishing is skipped when a push touches only documentation, the release scripts, tests, CI
+configuration or repository housekeeping, so such changes never mint a version. Each publish writes a
+summary on its run page and records the published version on the commit (GitHub cannot rename a run
+after it starts, so the run list shows the `run-name`).
 
 ## Contributing
 

@@ -8,6 +8,11 @@ name: Publish stable
 # BEFORE the dev publish: if that publish fails the sequence has still advanced, otherwise the next
 # release would compute the same version and the Marketplace would reject it.
 #
+# Visibility: GitHub evaluates `run-name` when the run is created and offers no API to rename a run
+# afterwards, so the computed version cannot appear in the run list. Instead this workflow writes a
+# summary on the run page and a commit status naming the published version, so "what happened" is
+# visible where people look.
+#
 # `paths-ignore`: a push whose every changed path is documentation, the CI/release scripts, tests, or
 # repository housekeeping cannot change the shipped extension, so it must not mint a version.
 # `overview.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored; neither is
@@ -25,9 +30,13 @@ on:
       - '.gitattributes'
       - '.github/**'
 
-# Needed to push the version tag; the branch itself stays protected.
+run-name: "Publish stable (release)"
+
+# `contents: write` pushes the version tag; `statuses: write` records the published version on the
+# commit. The branch itself stays protected.
 permissions:
   contents: write
+  statuses: write
 
 # Serialize with the dev publish: the two editions share one tag sequence, so publishes must not
 # interleave. A queued run recomputes its version from the tags when it starts.
@@ -78,3 +87,32 @@ jobs:
         env:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
         run: npm run publish:dev
+      # Visible outcome: the run page gets a summary, and the commit gets a status naming the version.
+      - name: Summarise what was published
+        if: always()
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          {
+            echo "## Published${VERSION:+ Static $VERSION}"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Edition | \`static\` (public) |"
+            echo "| Version | \`${VERSION:-not computed}\` |"
+            echo "| Tag | \`${{ steps.version.outputs.tag }}\` |"
+            echo "| Dev edition | published at the same version |"
+            echo "| Listing | https://marketplace.visualstudio.com/items?itemName=f-steff.static |"
+            echo "| Publisher | https://marketplace.visualstudio.com/manage/publishers/f-steff |"
+            echo ""
+            echo "The Marketplace validates the upload asynchronously; if the listing page briefly errors, retry in a minute."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Record the version on the commit
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X POST "repos/${{ github.repository }}/statuses/${{ github.sha }}" \
+            -f state=success \
+            -f context="Marketplace: static" \
+            -f description="Published Static ${{ steps.version.outputs.version }}" \
+            -f target_url="https://marketplace.visualstudio.com/items?itemName=f-steff.static"
