@@ -10,6 +10,9 @@ dist/
 # Packaged extensions
 *.vsix
 
+# Downloaded Static backups (they contain real project data - never publishable)
+static-backup-*.zip
+
 # Generated (merged) manifests from scripts/tfx.js
 .generated-*.json
 

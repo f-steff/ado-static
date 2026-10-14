@@ -112,17 +112,25 @@ page, which links back here. There is no enable/disable switch: Static is always
 
 ### Backup tab
 
+> The **release** (`static`) and **development** (`static-dev`) editions keep **separate** data, so
+> installing one in place of the other starts from an empty project. Switching editions therefore
+> means: **Download** a backup, install the other edition, then **Restore** it (here or from a
+> pipeline). Without that sequence the data looks lost - it is still in the other edition's scope
+> and only becomes visible again after switching back.
+
 **Download backup** reads every project's collection and saves a single ZIP
 (`static-backup-{organization}-{date}.zip`) holding `static-backup.json` (`format: "static-export"`,
 `schemaVersion: 2`, `source`, and a `projects` list). Pages are included **in full**, because their
 content chunks are ordinary documents in the same collection, and no document carries the
-installation-specific `__etag`. Choosing a **Backup file (ZIP)** only reads and validates it (the tab
-then shows the project/document counts and the source organization); the **Restore** button applies
-it, after a confirmation - so choosing a file never writes anything. For every project in the archive
-that still exists, its data is **replaced** by the backup's (documents the backup does not contain
-are removed); projects that no longer exist are skipped and reported. The tab also shows a single
-`StaticAdmin@0` pipeline that backs up by default and, with `mode = restore`, restores the newest
-backup of that same pipeline.
+installation-specific `__etag`.
+
+Choosing a **Backup file (ZIP)** only reads and validates it; the summary
+(`<file>: N project(s), M document(s) from <org>`) appears between the file field and the
+**Restore** button, and the button then shows an **inline confirmation** directly beneath it (there
+is no modal) before anything is written. For every project in the archive that still exists, its data
+is **replaced** by the backup's (documents the backup does not contain are removed); projects that no
+longer exist are skipped and reported. The tab also shows a single `StaticAdmin@0` pipeline that
+backs up by default and, with `mode = restore`, restores the newest backup of that same pipeline.
 
 Rationale: extension data is scoped per extension id, so the stable and dev editions keep separate
 stores; the archive is how an organization is copied between them (for example to seed dev with

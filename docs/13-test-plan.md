@@ -477,8 +477,9 @@ Project settings -> Pages (and Links): press **View** on a row.
 Organization settings -> Static -> **Backup**. Choose **Download backup**; then open the other
 edition (`static` <-> `static-dev`) in the same organization, choose that ZIP as the **Backup file**,
 and press **Restore**.
-**Expected:** choosing the file alone writes nothing and shows the project/document counts; the
-**Restore** button then asks for confirmation and applies it. The ZIP holds `static-backup.json` with
+**Expected:** choosing the file alone writes nothing and shows the project/document counts between
+the file field and the button; the **Restore** button then shows an inline confirmation directly
+beneath it and applies it on confirm. The ZIP holds `static-backup.json` with
 one entry per project that has data (`index`, `links`, `content-meta-*` / `content-*`, `repos`);
 pages restore **in full** (open one in the other edition and compare it with the original); no
 `__etag` appears in the file; a non-ZIP file, a ZIP without `static-backup.json`, or JSON with a
