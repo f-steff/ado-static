@@ -83,30 +83,107 @@ ado-static/
 3. `npm run build:dev` -> `dist/`.
 4. `npm run package:dev` -> a `.vsix` in the repo root, or publish (below) for the real edition.
 
+## Branching and releases
+
+- Only **`main`** and **`develop`** are long-lived; a branch exists for its pull request. GitHub
+  deletes the head branch when the pull request merges (`delete_branch_on_merge` is on), so no merged
+  branch accumulates.
+- Both are protected by the ruleset *Protect main and develop*: a pull request is required (no direct
+  pushes, no force-push, no deletion) **and the `build` check must pass on an up-to-date branch**.
+- **`main` may only be reached from `develop`.** The `release-guard` workflow runs on every pull
+  request and fails a `main`-targeted one whose source is not `develop`, so the flow is always
+  `feature/*` -> `develop` -> `main`.
+- `develop` is the integration branch. PRs land there with a **rebase** merge (flat history), and every
+  push that can change the shipped extension publishes the dev edition.
+- `main` is the **released line**. A release **merges** `develop` into `main` (a merge commit), so
+  `main` contains every commit `develop` has, and the release tag sits on that merge commit.
+- The ruleset *Protect main and develop* requires a pull request, the status checks, no deletion and no
+  force-push - but **not** linear history. That last rule was removed deliberately: it forced GitHub's
+  rebase-merge, which rewrites the committer, so **every SHA changes** and `main` became a *parallel
+  copy* of `develop`'s history that shares only the first commit. Every later release then minted
+  another set of copies, and a release tag could never appear on `develop`.
+- Kept for context, the tags published before that fix live on different lines: `v0.1.0` on `main`, the
+  dev tags (`v0.0.x`, `v0.1.1` and later) on `develop`. A tag is only visible in a Git UI when the
+  branch containing its commit is selected - so `v0.1.0` shows under `main`, not under `develop`.
+  Releases from the fix onwards tag `main`'s merge commit, and `main` genuinely contains `develop`.
+- A workflow runs the file **at the ref it was dispatched on**, and the `workflow_dispatch` UI defaults
+  to the default branch. So while `main` still carries the pre-release workflow files, a manual
+  dispatch from `main` runs those older definitions - for example `actions/checkout@v4` /
+  `actions/setup-node@v4`, which raise a Node.js 20 deprecation annotation. Pick `develop` (or
+  `--ref develop`), or sync the non-shipping workflow files to `main` with a housekeeping-only change:
+  because `.github/**` is in `paths-ignore`, that publishes nothing.
+
 ## CI
 
 Workflows live in `.github/workflows/` (GitHub's requirement):
 
 - `ci.yml` - on pull requests and pushes: install, lint, type check, test, `verify:clean`, build,
   and upload the VSIX as a build artifact (no publish).
-- `publish-dev.yml` - on push to `develop`: publish the private dev edition (sharing is separate).
-- `publish-stable.yml` - on push to `main`: publish the stable edition.
-- `share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with an organization.
+- `publish-dev.yml` - on push to `develop`, or manually with an optional `version`: publish the
+  private dev edition at the next revision of the released minor.
+- `publish-stable.yml` - on push to `main`: publish the stable edition **and** the dev edition at the
+  same version.
+- `share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with an organization and
+  report the resulting access list.
 
-A publish is skipped when **every** changed path in the push is documentation, tests, CI
-configuration or repository housekeeping (`paths-ignore`) - such a push cannot change the shipped
-extension, so it must not mint a version. `overview.md` and `LICENSE` are packaged into the VSIX and
-are deliberately **not** ignored, and a mixed push still publishes.
+### Local gate first, then the pipeline
+
+Run the whole gate locally and fix every warning **before** pushing - `npx tsc --noEmit`,
+`npm run lint` (which fails on any warning: `--max-warnings 0`), `npm test`, `npm run verify:clean`,
+`npm run build:prod` - then watch the run and fix anything it reports. GitHub annotates every warning
+on the run, so a single unused binding hides the real errors.
+
+The workflows pin what GitHub deprecates or migrates: the runner image is `ubuntu-24.04` (rather than
+`ubuntu-latest`, which migrates to Ubuntu 26 in October 2026) and the actions are on majors that run on
+the current Node (the Node-20 majors raise a deprecation annotation on every run).
+
+### Seeing what a run did
+
+GitHub evaluates `run-name` when a run is created and offers **no API to rename a run**, so a version
+computed inside the job cannot appear in the Actions list. The workflows compensate:
+
+- `run-name` gives the list a meaningful title (`Publish dev 0.1.2` for a manual run,
+  `Publish stable (release)` otherwise).
+- Each publish writes a **job summary** (shown on the run page) naming the edition, version, tag and
+  listing URL.
+- Each publish records a **commit status** (`Marketplace: static` / `Marketplace: static-dev`) whose
+  description is `Published Static 0.1.0`, so the commit itself records what was released.
+- `share-dev.yml` reads the access list **back from the Marketplace** (`tfx extension show`) but
+  reports only **how many** organizations have access. The list itself is confidential: this repository
+  (and therefore every run name, step name, log line and run summary) is public, so the organization
+  comes from a dispatch input and never enters an `env:` block or the script text - the runner prints
+  those *before* a step runs. `ci/dispatch-input.mjs` reads it from the event payload file (only a path
+  is visible) and hands it to the two places that need it: `::add-mask::` before anything else runs, and
+  `eval` inside the share step - so tfx's own `Sharing extension with ...` output and the `Shared with`
+  list print `***`. The names are visible to the publisher on the Marketplace publisher page, which is
+  the only record of them. The reporting step is **non-fatal** (`continue-on-error`) and needs only
+  `.github/**` and `ci/shared-with.mjs`, so a branch that is missing either still completes its share or
+  unshare and simply reports less.
+
+A publish is skipped when **every** changed path in the push is documentation, the CI/release
+scripts (`ci/**`), tests, or repository housekeeping (`paths-ignore`) - such a push cannot change the
+shipped extension, so it must not mint a version. `overview.md` and `LICENSE` are packaged into the
+VSIX and are deliberately **not** ignored; neither is `scripts/**`, because that tooling decides what
+ends up in the package. A mixed push still publishes. The local `t/` scratch folder (archived
+migration material, downloaded backups) is gitignored outright - it must never be committed.
 
 ## Versioning
 
-Versions are derived from git tags (see [README](../README.md)):
+Versions are derived from git tags (see [README](../README.md)); the rules live in
+[`ci/version.mjs`](../ci/version.mjs) and are unit-tested in
+[`tests/version.test.mjs`](../tests/version.test.mjs):
 
-- Major stays `0`; **minor** bumps and the revision resets to 0 on each merge to `main`;
-  **revision** bumps on each merge to `develop`.
+- Major stays `0`; both editions share **one** tag sequence.
+- **Stable** (`main`): the minor bumps, revision resets to 0 (`0.2.0`), and the release publishes
+  **both** editions at that version.
+- **Dev** (`develop`): the revision bumps inside the released minor (`0.2.1`, `0.2.2`, ...), so a dev
+  version reads as "the current release plus N merges".
 - The first stable is `0.1.0`; the first dev is `0.0.1`.
-- Each published version is tagged `vX.Y.Z` (annotated). The workflow computes the version, publishes,
-  then tags.
+- Each published version is tagged `vX.Y.Z` (annotated) **once**: a release tags before publishing the
+  dev edition, and the dev workflow skips a tag a release already created. The two publish workflows
+  share one concurrency group, so a queued run recomputes its version from the tags when it starts.
+- A **manual** run of *Publish dev* can pass a `version` input - for a re-publish, or to align the dev
+  edition with a release that predates the dual publish.
 
 ## Testing strategy
 

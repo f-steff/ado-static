@@ -14,7 +14,7 @@ export function fixedUrlError(url: string): string {
   let parsed: URL;
   try {
     parsed = new URL(value);
-  } catch (error) {
+  } catch {
     return "That is not a valid URL.";
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {

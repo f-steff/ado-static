@@ -27,6 +27,10 @@
 | D21 | Distribution targets **Azure DevOps Services (cloud) only**. On-premises Azure DevOps Server is a conscious non-goal: the packaged `extension.vsixmanifest` declares `<InstallationTarget Id="Microsoft.VisualStudio.Services.Cloud"/>` only, and every data call is cloud-fixed (`extmgmt.dev.azure.com` in the web extension and all three tasks, `dev.azure.com` in `listProjects`, and `organizationFromUrl` understands only `dev.azure.com` / `{org}.visualstudio.com`) - see the research note in [08](08-open-questions.md#research-kept-distribution-on-premises-and-vsix-artifacts). | OK |
 | D22 | Publishing tasks resolve the edition at run time: `extension: auto` (the default) uses whichever edition is installed, so one pipeline serves a test organization and production; pin `static` to force release-only publishing, which then **fails** while only the development edition is installed (that failure is the point). | OK |
 | D23 | Data is moved between the two editions with the **backup and restore** sequence (project-independent: organization settings -> Backup, or the `StaticAdmin@0` task). Each edition owns a separate data scope, so a swap starts from an empty project - always back up first, then install the other edition, then restore. | OK |
+| D24 | Both editions share **one tag sequence**: a `develop` merge publishes dev at `<released minor>.<revision + 1>` and a release (`main`) publishes **both** editions at the same version. A dev version therefore means "the current release plus N merges", and on release day a tester runs exactly the released code. | OK |
+
+| D25 | The organizations the private dev edition is shared with are **confidential**: the share workflow takes the organization as a dispatch input, masks it with `::add-mask::` before use (which also redacts tfx's own output), and reports only a **count**; the names exist solely on the Marketplace publisher page. | OK |
+| D26 | Only `main` and `develop` are long-lived branches; a branch is deleted when its pull request merges, and `main` can only be reached from `develop` (enforced by the `release-guard` check). Both branches require a pull request and the `build` check. | OK |
 
 ## Open questions
 
@@ -78,14 +82,31 @@ stable); create a **GitHub Release only for stable tags**, using the same file t
 (build once, reuse it) plus a `SHA256SUMS` and a note that the Marketplace is the only supported
 install path; name development assets `static-dev-<version>.vsix` and never attach them to a Release.
 
+### Publisher verification (the badge) and the flaky Details tab
+
+Kept from the migration notes, because it explains why the verified-publisher badge is still pending.
+
+- Verification is a **trust badge, not a publish gate** - publishing (including going public) works
+  without it.
+- Prerequisites: at least one **published extension for 6+ months**, and a **domain registered 6+
+  months** ago.
+- Flow: open the publisher's **Details** tab, save the domain, then add a **DNS TXT record** of the
+  form `_visual-studio-marketplace-<publisher>.<domain>`.
+- **Known fault:** on the publisher account the Details tab does not work - on page load
+  `GET /_apis/gallery/publishers/<publisher>/azurepublisher` returns 404, and pressing Save fires no
+  request, so no Details field persists. Believed to be a partially provisioned publisher / Entra ID
+  (Azure AD) namespace association. It does not block publishing.
+- Revisit before applying for the badge; if it persists, raise it with Marketplace publisher support
+  rather than working around it.
+
 ## Risks
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | Extension Data size ceiling too small for huge reports | A very large page can't be stored | Chunk + compress; a clear failure when a chunk still exceeds the limit. |
 | Publish races / partial writes | Corrupt or stale pages | Content-first ordering; `__etag` read-modify-write; reconciliation. |
-| Azure DevOps global PAT retirement (2026-12-01) | Publish pipeline breaks | Migrate publishing to Microsoft Entra ID (GitHub OIDC) before then. |
-| Marketplace publisher verification pending | Only the "verified" badge; the public listing may wait for it | Publisher created; verification is a background to-do. |
+| Azure DevOps global PAT retirement (2026-12-01) | Publish pipeline breaks | Migrate publishing to Microsoft Entra ID via GitHub OIDC **before then**: a service principal added as a publisher member, so no long-lived secret is stored. |
+| Marketplace publisher verification pending | Only the "verified" badge; not a publish gate | Prerequisites (6+ months published, 6+ months domain) plus a known publisher-side Details-tab fault - see the research note on publisher verification below. |
 | Public projects unsupported | Audience limitation | Scope v1 to private projects; document. |
 
 ## Resolved-by-design notes

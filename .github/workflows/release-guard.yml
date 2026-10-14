@@ -1,0 +1,32 @@
+name: Release guard
+
+# Gate for pull requests: only `develop` may be merged into `main`.
+#
+# Rationale: `main` is the released line, and every change reaches it through a release pull request
+# from `develop`, so a feature branch can never be merged into `main` directly - that is how two
+# workflow-only syncs slipped in and made `main` diverge even further from `develop`.
+#
+# The job runs for EVERY pull request so the check is always present: a job that only ran for
+# main-targeted pull requests could never be a required check, because pull requests into `develop`
+# would wait for a check that never appears.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  release-source:
+    name: release-source
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest migrates to Ubuntu 26 in October 2026
+    steps:
+      - name: Only develop may merge into main
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [ "$BASE" = "main" ] && [ "$HEAD" != "develop" ]; then
+            echo "::error::Only the 'develop' branch may be merged into 'main'; this pull request is from '$HEAD'. Feature work goes feature/* -> develop, and a release merges develop -> main."
+            exit 1
+          fi
+          echo "Ok: $HEAD -> $BASE"

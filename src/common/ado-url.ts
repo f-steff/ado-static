@@ -105,7 +105,7 @@ export function checkProjectUrl(
   let url: URL;
   try {
     url = new URL(value);
-  } catch (error) {
+  } catch {
     return { ok: false, error: "That is not a valid URL." };
   }
   if (url.protocol !== "https:") {

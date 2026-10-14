@@ -78,9 +78,13 @@ npm run build:dev      # development build (source maps, verbose logging) -> dis
 npm run build:prod     # production build (minified)                        -> dist/
 npm test               # unit tests (Node's test runner, bundled by esbuild)
 npx tsc --noEmit       # type check
-npm run lint           # eslint
+npm run lint           # eslint (fails on any warning: --max-warnings 0)
 npm run serve          # serve the repo at http://127.0.0.1:8977/ for shell checks
 ```
+
+> **Local gate first:** before pushing, run `npx tsc --noEmit && npm run lint && npm test &&
+> npm run verify:clean && npm run build:prod` and fix everything it reports - every warning becomes an
+> annotation on the pipeline run, where it hides real errors.
 
 > If your npm blocks install scripts, esbuild's postinstall may be skipped. If a build cannot find
 > the esbuild binary, run `node node_modules/esbuild/install.js`.
@@ -109,14 +113,17 @@ There are two Marketplace editions of the same code, under one publisher:
   organization is a separate, explicit step: run the **Share dev** workflow and give the
   organization as an input (nothing is stored in the repository). The Marketplace retains the
   sharing list across version publishes.
-- Merging to **`main`** publishes the **stable** edition.
+- Merging to **`main`** publishes the **stable** edition - and the **same build as the dev edition**
+  at the same version, so a tester is running exactly the released code on release day.
 
-Versions are derived from git tags and every published version is tagged:
+Versions are derived from git tags, and both editions share one sequence; every published version is
+tagged (annotated `vX.Y.Z`):
 
 - Major stays `0`.
-- **Minor** bumps (and the revision resets to 0) on each merge to `main`.
-- **Revision** bumps on each merge to `develop`.
-- Tags are annotated (`vX.Y.Z`); the first stable is `0.1.0`, the first dev is `0.0.1`.
+- **Stable** (`main`): the **minor** bumps and the revision resets to 0 - `0.2.0`.
+- **Dev** (`develop`): the **revision** bumps inside the release line - `0.2.1`, `0.2.2`, ... so a dev
+  version reads as "the current release plus N merges".
+- The first stable is `0.1.0`, the first dev is `0.0.1`.
 
 Publishing authenticates with a Marketplace token (`MARKETPLACE_PAT`). Azure DevOps global PATs are
 retired on 2026-12-01, so publishing is slated to move to Microsoft Entra ID (GitHub OIDC) before
@@ -127,12 +134,15 @@ then.
 - `.github/workflows/ci.yml` - on pull requests and pushes: install, lint, type check, test, and
   package the VSIX as a build artifact (no publish).
 - `.github/workflows/publish-dev.yml` - on push to `develop`: publish the dev edition.
-- `.github/workflows/publish-stable.yml` - on push to `main`: publish the stable edition.
+- `.github/workflows/publish-stable.yml` - on push to `main`: publish the stable edition, and the dev
+  edition at the same version.
 - `.github/workflows/share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with
-  an organization given as an input.
+  an organization given as an input, and report who currently has access.
 
-Publishing is skipped when a push touches only documentation, tests, CI configuration or repository
-housekeeping, so such changes never mint a version.
+Publishing is skipped when a push touches only documentation, the release scripts, tests, CI
+configuration or repository housekeeping, so such changes never mint a version. Each publish writes a
+summary on its run page and records the published version on the commit (GitHub cannot rename a run
+after it starts, so the run list shows the `run-name`).
 
 ## Contributing
 

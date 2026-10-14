@@ -21,7 +21,14 @@ esbuild.buildSync({
 
 const result = spawnSync(
     process.execPath,
-    ["--test", outFile, path.join(rootDir, "tests", "tasks.test.js")],
+    [
+        "--test",
+        outFile,
+        path.join(rootDir, "tests", "tasks.test.js"),
+        path.join(rootDir, "tests", "version.test.mjs"),
+        path.join(rootDir, "tests", "shared-with.test.mjs"),
+        path.join(rootDir, "tests", "dispatch-input.test.mjs")
+    ],
     { stdio: "inherit" }
 );
 process.exit(result.status || 0);

@@ -39,7 +39,7 @@ SDK.ready()
     // The navigation service (when available) makes the selected report bookmarkable.
     try {
       nav = await getHostNavigation();
-    } catch (error) {
+    } catch {
       nav = null;
     }
     const config = SDK.getConfiguration() as {
@@ -126,7 +126,7 @@ async function renderReports(root: HTMLElement, attachments: Attachment[]): Prom
       if (found) {
         selected = found;
       }
-    } catch (error) {
+    } catch {
       // Older hosts may not expose query params; fall back to the first report.
     }
   }

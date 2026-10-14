@@ -12,12 +12,12 @@ const rootDir = path.join(__dirname, "..");
 const binDir = path.join(rootDir, "node_modules", ".bin");
 const isWindows = process.platform === "win32";
 
-// Usage: node scripts/tfx.js <create|publish|share|unshare> <dev|stable>
-const commands = ["create", "publish", "share", "unshare"];
+// Usage: node scripts/tfx.js <create|publish|share|unshare|show> <dev|stable>
+const commands = ["create", "publish", "share", "unshare", "show"];
 const [command, configName] = process.argv.slice(2);
 
 if (!command || !configName || commands.indexOf(command) < 0) {
-  console.error("Usage: node scripts/tfx.js <create|publish|share|unshare> <dev|stable>");
+  console.error("Usage: node scripts/tfx.js <create|publish|share|unshare|show> <dev|stable>");
   process.exit(1);
 }
 
@@ -82,6 +82,21 @@ function buildArgs(command, manifestFile) {
     }
     orgs.forEach((org) => args.push(flag, org));
     return appendToken(args);
+  }
+  if (command === "show") {
+    // Local convenience: prints the extension info (with the `sharedWith` list) for inspection. The
+    // share workflow calls tfx directly instead, so that it needs no `scripts/**` on the branch it
+    // runs from - see ci/shared-with.mjs.
+    const manifest = readJson(manifestFile);
+    return appendToken([
+      "extension",
+      "show",
+      "--publisher",
+      manifest.publisher,
+      "--extension-id",
+      manifest.id,
+      "--json"
+    ]);
   }
   const args = ["extension", command === "create" ? "create" : "publish", "--manifests", manifestFile];
   // Publish-only extras come from the environment so no secrets live in the repo.

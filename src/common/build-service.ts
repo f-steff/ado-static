@@ -47,7 +47,7 @@ export async function listDefinitions(): Promise<DefinitionInfo[]> {
     response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
     });
-  } catch (error) {
+  } catch {
     throw new Error(
       "Listing pipelines is unavailable here (needs the Build (read) permission)."
     );
@@ -127,7 +127,7 @@ async function listBuilds(definitionId: number, top: number): Promise<BuildRef[]
     response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
     });
-  } catch (error) {
+  } catch {
     throw new Error("Reading builds is unavailable here (needs the Build (read) permission).");
   }
   if (response.status === 401 || response.status === 403) {
@@ -177,7 +177,7 @@ export async function getPipelineSummaries(window = 30): Promise<PipelineSummary
       }
       try {
         out.push(summarize(definition, await listBuilds(definition.id, window)));
-      } catch (error) {
+      } catch {
         out.push({
           id: definition.id,
           name: definition.name,
@@ -209,7 +209,7 @@ export async function countPipelines(projectId: string): Promise<number> {
     response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
     });
-  } catch (error) {
+  } catch {
     throw new Error("Reading pipelines is unavailable here.");
   }
   if (!response.ok) {
@@ -251,7 +251,7 @@ export async function getBuildTimeline(buildId: string): Promise<TimelineRecord[
     response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
     });
-  } catch (error) {
+  } catch {
     return [];
   }
   if (!response.ok) {
@@ -286,7 +286,7 @@ export async function getBuildInfo(buildId: string): Promise<BuildInfo | null> {
     response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
     });
-  } catch (error) {
+  } catch {
     return null;
   }
   if (!response.ok) {
@@ -340,7 +340,7 @@ export async function latestBuildId(
     response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
     });
-  } catch (error) {
+  } catch {
     throw new Error("Resolving the latest build is unavailable here (needs the Build (read) permission).");
   }
   if (response.status === 401 || response.status === 403) {

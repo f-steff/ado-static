@@ -33,7 +33,7 @@ export function readPageStore(slug: string): Record<string, string> {
       out[key] = String(parsed[key]);
     });
     return out;
-  } catch (error) {
+  } catch {
     // Storage can be blocked by policy; persistence is then unavailable but the URL still works.
     return {};
   }
@@ -52,7 +52,7 @@ export function writePageStore(slug: string, key: string, value: string | null):
       store[key] = value;
     }
     window.localStorage.setItem(slot(slug), JSON.stringify(store));
-  } catch (error) {
+  } catch {
     // Ignore: nothing we can do, and the URL keeps the state for this session.
   }
 }
@@ -61,7 +61,7 @@ export function writePageStore(slug: string, key: string, value: string | null):
 export function clearPageStore(slug: string): void {
   try {
     window.localStorage.removeItem(slot(slug));
-  } catch (error) {
+  } catch {
     // Ignore.
   }
 }

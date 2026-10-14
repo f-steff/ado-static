@@ -52,23 +52,26 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      # Mask the organization before anything can print it. The value travels only through the
-      # environment, so the script text in the log stays literal and the runner redacts the value from
-      # here on - including the output of the next step.
+      # Mask the organization before anything can print it. The value never enters an `env:` block or
+      # the script text - ci/dispatch-input.mjs reads it from the event payload file, whose path is all
+      # the runner sees - so the only thing carrying it is the workflow command it redacts.
       - name: Treat the organization as secret
-        env:
-          ORGANIZATION: ${{ inputs.organization }}
-        run: echo "::add-mask::$ORGANIZATION"
-      # The organization is passed through ADO_SHARE_ORGS; scripts/tfx.js splits it on commas or
-      # whitespace and shares/unshares the dev manifest's publisher + id.
+        run: node ci/dispatch-input.mjs organization mask
+      # tfx is handed the organization through the shell (`eval`), not through an env block, and its own
+      # output ("Sharing extension with ...", the "Shared with" list) is redacted by the mask above.
       - name: ${{ inputs.action }} the requested organization
         env:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
-          ADO_SHARE_ORGS: ${{ inputs.organization }}
-        run: node scripts/tfx.js ${{ inputs.action }} dev
-      # Report the count only: the names must not appear in a public run summary.
+        run: |
+          eval "$(node ci/dispatch-input.mjs organization export ADO_SHARE_ORGS)"
+          node scripts/tfx.js ${{ inputs.action }} dev
+      # Report the count only: the names must not appear in a public run summary. This step never
+      # fails the run (sharing has already been decided) and it reads the list with tfx directly, so
+      # the workflow depends on nothing beyond `.github/**` and `ci/shared-with.mjs` - a branch that
+      # lacks even those still shares successfully and just says so.
       - name: Report how many organizations have access
         if: always()
+        continue-on-error: true
         env:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
         run: |
@@ -79,7 +82,8 @@ jobs:
             echo ""
             echo "Organizations that may install the dev edition, read back from the Marketplace:"
             echo ""
-            node scripts/tfx.js show dev | node ci/shared-with.mjs
+            node ci/shared-with.mjs < <(npx tfx-cli extension show --publisher f-steff --extension-id static-dev --json --token "$TFS_PAT" 2>/dev/null) 2>/dev/null \
+              || echo "_Could not read the access list from the Marketplace._"
             echo ""
             echo "Names are visible to the publisher: https://marketplace.visualstudio.com/manage/publishers/f-steff"
           } >> "$GITHUB_STEP_SUMMARY"
