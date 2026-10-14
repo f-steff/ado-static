@@ -3,10 +3,21 @@ name: Publish stable
 # Publish the public stable edition when `main` is merged.
 # Rationale: the version is derived from git tags, then the published version is tagged. The
 # `MARKETPLACE_PAT` secret holds a Marketplace (Manage) token.
+#
+# `paths-ignore` rationale: a push whose every changed path is documentation, tests or CI
+# configuration cannot change the shipped extension, so it must not mint a release version. Note that
+# `overview.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored - and a mixed
+# push still publishes, because every path must match to skip.
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'tests/**'
+      - '.github/**'
 
 # Needed to push the version tag; the branch itself stays protected.
 permissions:
