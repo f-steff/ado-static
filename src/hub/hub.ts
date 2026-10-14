@@ -231,7 +231,7 @@ function setTitle(title: string): void {
     if (nav) {
       nav.setDocumentTitle(title);
     }
-  } catch (error) {
+  } catch {
     // Older hosts may not support it; the local title still applies.
   }
 }

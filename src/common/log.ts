@@ -62,7 +62,7 @@ export function describeError(error: unknown): string {
     }
     try {
       return JSON.stringify(error);
-    } catch (_ignored) {
+    } catch {
       // Fall through to String().
     }
   }

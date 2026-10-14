@@ -78,9 +78,13 @@ npm run build:dev      # development build (source maps, verbose logging) -> dis
 npm run build:prod     # production build (minified)                        -> dist/
 npm test               # unit tests (Node's test runner, bundled by esbuild)
 npx tsc --noEmit       # type check
-npm run lint           # eslint
+npm run lint           # eslint (fails on any warning: --max-warnings 0)
 npm run serve          # serve the repo at http://127.0.0.1:8977/ for shell checks
 ```
+
+> **Local gate first:** before pushing, run `npx tsc --noEmit && npm run lint && npm test &&
+> npm run verify:clean && npm run build:prod` and fix everything it reports - every warning becomes an
+> annotation on the pipeline run, where it hides real errors.
 
 > If your npm blocks install scripts, esbuild's postinstall may be skipped. If a build cannot find
 > the esbuild binary, run `node node_modules/esbuild/install.js`.

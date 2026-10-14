@@ -536,6 +536,13 @@ Marketplace** (`tfx extension show` -> `sharedWith`) plus the publisher page lin
 rename a run after creation, so the run list shows `run-name` rather than the computed version.
 (Automated: `formatSharedWith` in `tests/shared-with.test.mjs`.)
 
+### TC-81  -  A pipeline run carries no annotations  (process)
+Open any recent CI or publish run and look at its Annotations panel.
+**Expected:** nothing but the run's own output - no Node.js deprecation (the actions use the current
+Node major), no Ubuntu migration notice (the runner image is pinned to `ubuntu-24.04`), and no eslint
+warnings (`npm run lint` fails on any warning, so one cannot reach a run).
+(Automated: `npm run lint` with `--max-warnings 0` is part of the local gate and of every workflow.)
+
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
 **Expected:** the table shows a **Permanent delete by** column (`deletedUtc` + 5 days). Retention is

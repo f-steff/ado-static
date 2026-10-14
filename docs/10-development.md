@@ -96,6 +96,17 @@ Workflows live in `.github/workflows/` (GitHub's requirement):
 - `share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with an organization and
   report the resulting access list.
 
+### Local gate first, then the pipeline
+
+Run the whole gate locally and fix every warning **before** pushing - `npx tsc --noEmit`,
+`npm run lint` (which fails on any warning: `--max-warnings 0`), `npm test`, `npm run verify:clean`,
+`npm run build:prod` - then watch the run and fix anything it reports. GitHub annotates every warning
+on the run, so a single unused binding hides the real errors.
+
+The workflows pin what GitHub deprecates or migrates: the runner image is `ubuntu-24.04` (rather than
+`ubuntu-latest`, which migrates to Ubuntu 26 in October 2026) and the actions are on majors that run on
+the current Node (the Node-20 majors raise a deprecation annotation on every run).
+
 ### Seeing what a run did
 
 GitHub evaluates `run-name` when a run is created and offers **no API to rename a run**, so a version

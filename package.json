@@ -16,7 +16,7 @@
     "share:dev": "node scripts/tfx.js share dev",
     "unshare:dev": "node scripts/tfx.js unshare dev",
     "verify:clean": "node ci/scan-identifiers.js",
-    "lint": "eslint \"src/**/*.ts\""
+    "lint": "eslint \"src/**/*.ts\" --max-warnings 0"
   },
   "dependencies": {
     "azure-devops-extension-api": "^2.0.0",

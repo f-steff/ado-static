@@ -272,7 +272,7 @@ async function jumpToPullRequest(input: HTMLInputElement, notice: HTMLElement): 
       void nav.navigate(pr.webUrl);
       return;
     }
-  } catch (error) {
+  } catch {
     // A lookup failure is treated like "not found" below.
   }
   // Not found: show it briefly (the number stays for correction).
