@@ -85,6 +85,14 @@ ado-static/
 
 ## Branching and releases
 
+- Only **`main`** and **`develop`** are long-lived; a branch exists for its pull request. GitHub
+  deletes the head branch when the pull request merges (`delete_branch_on_merge` is on), so no merged
+  branch accumulates.
+- Both are protected by the ruleset *Protect main and develop*: a pull request is required (no direct
+  pushes, no force-push, no deletion) **and the `build` check must pass on an up-to-date branch**.
+- **`main` may only be reached from `develop`.** The `release-guard` workflow runs on every pull
+  request and fails a `main`-targeted one whose source is not `develop`, so the flow is always
+  `feature/*` -> `develop` -> `main`.
 - `develop` is the integration branch. PRs land there with a **rebase** merge (flat history), and every
   push that can change the shipped extension publishes the dev edition.
 - `main` is the **released line**. A release **merges** `develop` into `main` (a merge commit), so
