@@ -536,6 +536,20 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.0.9 (dev edition) - restore flow, and a full backup/restore round trip
+
+Run on 2026-10-14 against the deployed `static-dev` 0.0.9 (the build released from the restore-flow
+change).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-78 | OK | The whole sequence was driven in the tab: **initial** (`Restore` and `Clear` inactive, `Confirm restore` hidden) -> **file chosen** (`<file>: 1 project(s), 3 document(s) from <organization>. Choose Restore to apply it.`, both active, Confirm still hidden) -> **Restore** (question moved into the status line, `Confirm restore` shown and active, `Restore` inactive) -> **Clear** (status and file cleared, both inactive, Confirm hidden again) |
+| TC-75 | OK | `Download backup` saved a 51,661-byte archive (`1 project(s), 50 KiB.` reported in the tab); choosing it showed the counts; `Confirm restore` performed the write and reported `Restored 1 project(s), 3 document(s).`, then returned the row to its initial state |
+| TC-75 (data) | OK | Straight after the restore the Pages hub still lists the page (206.3 KiB, `Build: 20261014.4`) and the organization overview still reports Pages=1 / Pipelines=2 / Repos=8 for the project - the round trip preserved the stored data |
+
+> The restore in this run used an archive taken minutes earlier, so it wrote back the same state; the
+> write path, the `replace` semantics and the reset behaviour were exercised for real.
+
 ### 0.0.8 (dev edition; one organization, one project)
 
 Run on 2026-10-14 against the deployed `static-dev` 0.0.8. "pipeline" = verified through a real
@@ -564,8 +578,9 @@ pipeline run (build ids in the evidence).
 | TC-76 | OK (pipeline) | Build 4605: backup wrote 38,410 bytes (1 project, 3 documents) and attached the artifact; the dry-run restore reported "would restore 1 project(s), 3 document(s); no writes were made" |
 
 Not covered by this sweep: the cross-origin iframe clicks that need a human mouse (add/edit/delete
-page and link, dialog confirmations), the report tab (TC-65, TC-68), and the destructive restore
-write path - the dry run and the UI validation path were verified instead.
+page and link, dialog confirmations) and the report tab (TC-65, TC-68). The destructive restore write
+path could not be exercised on 0.0.8 (the confirmation controls were broken - see TC-78); it was
+verified for real on 0.0.9 above.
 
 ### Legacy: 0.1.41 (pre-migration, previous repository)
 
