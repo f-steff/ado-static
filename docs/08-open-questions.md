@@ -29,6 +29,8 @@
 | D23 | Data is moved between the two editions with the **backup and restore** sequence (project-independent: organization settings -> Backup, or the `StaticAdmin@0` task). Each edition owns a separate data scope, so a swap starts from an empty project - always back up first, then install the other edition, then restore. | OK |
 | D24 | Both editions share **one tag sequence**: a `develop` merge publishes dev at `<released minor>.<revision + 1>` and a release (`main`) publishes **both** editions at the same version. A dev version therefore means "the current release plus N merges", and on release day a tester runs exactly the released code. | OK |
 
+| D25 | The organizations the private dev edition is shared with are **confidential**: the share workflow takes the organization as a dispatch input, masks it with `::add-mask::` before use (which also redacts tfx's own output), and reports only a **count**; the names exist solely on the Marketplace publisher page. | OK |
+
 ## Open questions
 
 | # | Question | Why it matters | Handling |

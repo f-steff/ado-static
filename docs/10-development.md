@@ -140,9 +140,12 @@ computed inside the job cannot appear in the Actions list. The workflows compens
   listing URL.
 - Each publish records a **commit status** (`Marketplace: static` / `Marketplace: static-dev`) whose
   description is `Published Static 0.1.0`, so the commit itself records what was released.
-- `share-dev.yml` reads the access list **back from the Marketplace** (`tfx extension show`, whose
-  `sharedWith` array names the organizations) and reports it in the summary - the extension keeps no
-  copy of that list, and the UI equivalent is the publisher page.
+- `share-dev.yml` reads the access list **back from the Marketplace** (`tfx extension show`) but
+  reports only **how many** organizations have access. The list itself is confidential: this repository
+  (and therefore every run name, step name, log line and run summary) is public, so the organization
+  comes from a dispatch input and is registered with `::add-mask::` before use - which also redacts
+  tfx's own `Sharing extension with ...` output. The names are visible to the publisher on the
+  Marketplace publisher page, which is the only record of them.
 
 A publish is skipped when **every** changed path in the push is documentation, the CI/release
 scripts (`ci/**`), tests, or repository housekeeping (`paths-ignore`) - such a push cannot change the
