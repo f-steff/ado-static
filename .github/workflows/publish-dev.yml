@@ -4,10 +4,21 @@ name: Publish dev
 # Rationale: the version is derived from git tags, then the published version is tagged. The
 # `MARKETPLACE_PAT` secret holds a Marketplace (Manage) token. Sharing with tester organizations is
 # a separate, explicit step (`share-dev.yml`), so no organization names are stored here at all.
+#
+# `paths-ignore` rationale: a push whose every changed path is documentation, tests or CI
+# configuration cannot change the shipped extension, so it must not burn a Marketplace version (or a
+# tag). Note that `overview.md` and `LICENSE` are packaged into the VSIX and are therefore NOT
+# ignored - and a mixed push still publishes, because every path must match to skip.
 on:
   push:
     branches:
       - develop
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'tests/**'
+      - '.github/**'
 
 # Needed to push the version tag; the branch itself stays protected.
 permissions:
