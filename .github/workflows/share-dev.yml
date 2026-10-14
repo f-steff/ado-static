@@ -1,10 +1,15 @@
 name: Share dev
 
 # Manually (un)share the private development edition with an Azure DevOps organization.
-# Rationale: the organization is a workflow input rather than a stored secret or variable, so there
-# is nothing to keep a record of; the Marketplace retains the sharing list across version publishes,
-# so this only needs running when an organization is added or removed. The `workflow_dispatch` form
-# is populated from the default branch, so until this file reaches `main` dispatch it from the CLI:
+#
+# Rationale: the organization is a workflow input rather than a stored secret or variable, so there is
+# nothing to keep a record of; the Marketplace retains the sharing list across version publishes, so
+# this only needs running when an organization is added or removed. The workflow then reports the
+# full list, read back from the Marketplace, so the run itself answers "who has access?" - the only
+# authoritative record, since the extension deliberately keeps no copy.
+#
+# The `workflow_dispatch` form is populated from the default branch, so until this file reaches `main`
+# dispatch it from the CLI:
 #   gh workflow run share-dev.yml --repo f-steff/ado-static --ref develop \
 #     -f organization=<org> -f action=share
 on:
@@ -21,6 +26,8 @@ on:
         options:
           - share
           - unshare
+
+run-name: "${{ inputs.action }} dev: ${{ inputs.organization }}"
 
 # Read-only: sharing changes nothing in the repository.
 permissions:
@@ -44,3 +51,21 @@ jobs:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
           ADO_SHARE_ORGS: ${{ inputs.organization }}
         run: node scripts/tfx.js ${{ inputs.action }} dev
+      # Report the full list afterwards: tfx `show` returns the extension info, whose `sharedWith`
+      # array names every organization that may install the private edition.
+      - name: Report who has access
+        if: always()
+        env:
+          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
+        run: |
+          {
+            echo "## Static (Dev) access"
+            echo ""
+            echo "This run: \`${{ inputs.action }}\` **${{ inputs.organization }}**"
+            echo ""
+            echo "Organizations the extension is currently shared with (read back from the Marketplace):"
+            echo ""
+            node scripts/tfx.js show dev | node ci/shared-with.mjs
+            echo ""
+            echo "The same list in the UI (sign in as the publisher): https://marketplace.visualstudio.com/manage/publishers/f-steff"
+          } >> "$GITHUB_STEP_SUMMARY"

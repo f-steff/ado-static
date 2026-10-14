@@ -9,6 +9,10 @@ name: Publish dev
 # Marketplace (Manage) token; sharing with tester organizations is a separate, explicit step
 # (`share-dev.yml`).
 #
+# Visibility: GitHub evaluates `run-name` when the run is created and offers no API to rename a run
+# afterwards, so the computed version cannot appear in the run list. Instead this workflow writes a
+# summary on the run page and a commit status naming the published version.
+#
 # `paths-ignore`: a push whose every changed path is documentation, the CI/release scripts, tests, or
 # repository housekeeping cannot change the shipped extension, so it must not mint a version.
 # `overview.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored; neither is
@@ -33,9 +37,13 @@ on:
         description: "Version to publish as static-dev (leave empty for the computed next version)"
         required: false
 
-# Needed to push the version tag; the branch itself stays protected.
+run-name: "Publish dev${{ inputs.version && format(' {0}', inputs.version) || '' }}"
+
+# `contents: write` pushes the version tag; `statuses: write` records the published version on the
+# commit. The branch itself stays protected.
 permissions:
   contents: write
+  statuses: write
 
 # Serialize with the stable publish: the two editions share one tag sequence, so publishes must not
 # interleave. A queued run recomputes its version from the tags when it starts.
@@ -96,3 +104,31 @@ jobs:
             git tag -a "${{ steps.version.outputs.tag }}" -m "Static ${{ steps.version.outputs.version }}"
             git push origin "${{ steps.version.outputs.tag }}"
           fi
+      # Visible outcome: the run page gets a summary naming the version, and so does the commit.
+      - name: Summarise what was published
+        if: always()
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          {
+            echo "## Published${VERSION:+ Static (Dev) $VERSION}"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Edition | \`static-dev\` (private) |"
+            echo "| Version | \`${VERSION:-not computed}\` |"
+            echo "| Tag | \`${{ steps.version.outputs.tag }}\` |"
+            echo "| Listing | https://marketplace.visualstudio.com/items?itemName=f-steff.static-dev |"
+            echo "| Access | run the **Share dev** workflow, or see https://marketplace.visualstudio.com/manage/publishers/f-steff |"
+            echo ""
+            echo "A dev version reads as \"the current release plus N merges\" (a release publishes both editions at the same version)."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Record the version on the commit
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X POST "repos/${{ github.repository }}/statuses/${{ github.sha }}" \
+            -f state=success \
+            -f context="Marketplace: static-dev" \
+            -f description="Published Static (Dev) ${{ steps.version.outputs.version }}" \
+            -f target_url="https://marketplace.visualstudio.com/items?itemName=f-steff.static-dev"

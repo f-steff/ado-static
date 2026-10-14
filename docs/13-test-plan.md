@@ -527,6 +527,15 @@ two publish workflows share one concurrency group, so they cannot interleave on 
 manual *Publish dev* run with a `version` input publishes exactly that version and skips tagging when
 the tag already exists. (Automated: the bump rules are covered by `tests/version.test.mjs`.)
 
+### TC-80  -  A run says what it published, and who may install the dev edition  (process)
+Open a completed *Publish dev* / *Publish stable* run, the commit it ran on, and a `Share dev` run.
+**Expected:** the run page shows a **summary** naming the edition, version, tag and listing URL; the
+commit carries a status `Marketplace: static` / `Marketplace: static-dev` described as
+`Published Static <version>`; `Share dev` reports the organizations **read back from the
+Marketplace** (`tfx extension show` -> `sharedWith`) plus the publisher page link. GitHub cannot
+rename a run after creation, so the run list shows `run-name` rather than the computed version.
+(Automated: `formatSharedWith` in `tests/shared-with.test.mjs`.)
+
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
 **Expected:** the table shows a **Permanent delete by** column (`deletedUtc` + 5 days). Retention is
