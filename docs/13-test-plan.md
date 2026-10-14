@@ -570,6 +570,26 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.2.0 (stable; first release of the code the dev editions carried) - process cases
+
+Released on 2026-10-14 by merging `develop` into `main` (PR #32). The extension content is the code the
+dev editions carried (unchanged since the `static-dev` builds swept below), so this block records what
+is specific to the release: the automated gate, the release mechanics, and the process cases.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-29 | OK | `npx tsc --noEmit` clean, `npm run lint` 0 warnings (`--max-warnings 0`), **72/72** tests, `verify:clean` clean - locally and in the `Verify` step of the release run |
+| TC-79 | OK | `Publish stable (release)` run 38613402269: all 12 steps green; **`static` 0.2.0** (public listing) and **`static-dev` 0.2.0** published at the same version; tag `v0.2.0` points at the merge commit that is `main`'s head; the merge triggered exactly two runs (`Publish stable` + `CI`) |
+| TC-81 | OK | The release run carries **no annotations** (every step `success`, no warning/error annotation) |
+| TC-80 | OK | The run names the outcome and the version (`Summarise what was published`, commit status `Marketplace: static: Published Static 0.2.0`). The organization is invisible in `share dev` - dispatched on `main` (run 38614439140, after the release brought the fixed workflow there): **0** raw occurrences in the log, 7 redacted lines, `Sharing extension with ***.` |
+| TC-82 | OK | The release arrived as a `develop` -> `main` pull request and `release-source` passed; the feature branch was deleted on merge; only `main` and `develop` remain |
+
+Sharing is not touched by a publish: the release log reports `Sharing: not shared (use --share-with to
+share)` for both editions, so the organizations already shared keep access to 0.2.0.
+
+> Follow-up (cosmetic): the release records only the **stable** commit status, so the dev edition
+> published at the same version has no status of its own.
+
 ### 0.0.9 (dev edition) - restore flow, and a full backup/restore round trip
 
 Run on 2026-10-14 against the deployed `static-dev` 0.0.9 (the build released from the restore-flow
@@ -735,6 +755,7 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.1.54 | OK | NOTE | Short **Area** labels (Repo/PR/Pipeline/Artifact/Fixed), Title/Area no-wrap on all tabs, auto-**Fixed** for unmodelled URLs, and a fix for the false "missing placeholder" error on concrete-build log links; tests 47/47 |
 | 0.1.55 | OK | NOTE | Builder notes are neutral (red reserved for validation errors) |
 | 0.1.56 | OK | NOTE | Pages/Links settings gain a **View** action (opens in a new tab); Trash tables show **Permanent delete by** (deletedUtc + 5 days); the Pages hub now also enforces the 5-day lazy purge; tests 48/48 |
+| 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed
 
@@ -745,6 +766,8 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | B3 | pipeline | "A task is missing ... PublishPage with version 1" | Task major version is 0, so the alias is `PublishPage@0` | Pipeline uses `PublishPage@0` |
 | B4 | 0.1.17 (found by user) | Disabling a page dimmed the whole row, so the now-"Enable" button looked ghosted though clickable | `.disabled-row { opacity: 0.6 }` applied to the entire row | Mute only the page name (`.disabled-name`); never dim action buttons |
 | B5 | 0.1.17 (found by user) | When Pages was disabled org-wide, the hub still showed the stale per-project wording ("Enable it under Project settings -> Pages") | `renderDisabled` text and no re-check of the org switch | Org-wide wording; throttled `checkEnablement()` reloads the hub when the switch changes |
+| B6 | 0.2.0 (found in a `share dev` run) | A `share dev` run on `main` was marked **failed** although the share itself succeeded | The workflow on `main` referenced `ci/shared-with.mjs` and `scripts/tfx.js show`, which existed only on `develop` (a workflow-only sync) | The report reads the list with `npx tfx-cli` directly, prints a graceful fallback and is `continue-on-error`, so a report can never fail a share (#29) |
+| B7 | 0.2.0 (found while testing B6) | The organization was printed in the run log: once through a step's `env:` block, four times through a job-level variable | The runner prints a step's `env:` block **before** the step runs, so `::add-mask::` cannot redact its own step (and inherited variables appear in every earlier step) | The value is read from the event payload file and handed on with `::add-mask::` and `eval` only - it never enters an `env:` block or the script text (#30, #31) |
 
 ## Remaining manual checks (cross-origin iframe)
 
