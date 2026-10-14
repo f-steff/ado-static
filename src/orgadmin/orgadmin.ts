@@ -22,7 +22,6 @@ import { getHeading } from "../common/branding";
 import { pagesOrgSettingsUrl, pagesProjectSettingsUrl, extensionVersion } from "../common/extension-urls";
 import { filterByName } from "../common/filter";
 import { getHostNavigation, HostNavigationService } from "../common/host-nav";
-import { withQueryParam } from "../common/urls";
 import { describeError, logError, logInfo } from "../common/log";
 
 /**
@@ -115,7 +114,7 @@ function navigateTab(id: string): void {
   if (nav) {
     try {
       nav.navigate(pagesOrgSettingsUrl() + "#" + id);
-    } catch (error) {
+    } catch {
       // Fall through to an in-place switch.
     }
   }

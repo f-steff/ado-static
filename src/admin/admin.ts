@@ -118,9 +118,6 @@ let nav: HostNavigationService | undefined;
 const ADMIN_TABS = ["links", "pages", "pipelines", "repos", "trash", "about"];
 
 /** Normalizes a hash value (strips a leading '#'). */
-function normalizeTab(hash: string): string {
-  return (hash || "").replace(/^#/, "");
-}
 
 /** True when a hash value names one of this page's tabs. */
 function isAdminTab(id: string): boolean {
@@ -249,7 +246,7 @@ function render(): void {
       if (nav) {
         try {
           nav.navigate(pagesProjectSettingsUrl(projectName()) + "#" + id);
-        } catch (error) {
+        } catch {
           // Fall through to an in-place switch.
         }
       }
@@ -394,84 +391,6 @@ function buildGlobalTrashTable(): HTMLElement {
 }
 
 /** Help tab: a short guide to the extension, publishing and link options. */
-function buildHelp(): HTMLElement {
-  const wrap = el("div", "help");
-
-  const heading = (text: string) => wrap.appendChild(el("h3", undefined, text));
-  const para = (text: string) => wrap.appendChild(el("p", undefined, text));
-  const code = (text: string) => {
-    const box = el("pre", "code");
-    box.textContent = text;
-    wrap.appendChild(box);
-  };
-  const list = (items: string[]) => {
-    const ul = el("ul");
-    items.forEach((item) => ul.appendChild(el("li", undefined, item)));
-    wrap.appendChild(ul);
-  };
-
-  para(
-    "Static is a directory of stable, bookmarkable links into this Azure DevOps project. It adds " +
-      "a top-level Static group whose hubs are:"
-  );
-  list([
-    "Pages - self-contained HTML pages published by pipelines; selecting one opens it.",
-    "Links - curated links into the project (build status/artifacts/logs, repositories, ...).",
-    "PR - pull requests (open by default; completed/abandoned are optional).",
-    "Repos - the project's repositories with brief statistics."
-  ]);
-
-  heading("Publishing a page (pipeline)");
-  para("Pages are written only by the PublishPage task. Add a step to your pipeline:");
-  code(
-    "- task: PublishPage@0\n" +
-      "  inputs:\n" +
-      "    page: my-report          # the page slug (lowercase, hyphens)\n" +
-      "    sourcePath: $(Build.ArtifactStagingDirectory)/page/index.html\n" +
-      "    comment: Nightly report  # optional\n"
-  );
-  para(
-    "The task needs 'Allow scripts to access the OAuth token' (System.AccessToken). It creates the " +
-      "page if missing and updates it otherwise; large content is gzipped and chunked automatically."
-  );
-
-  heading("Creating links");
-  para(
-    "In the Links tab, give a Title and Slug, then build the URL with the cascading builder: choose " +
-      "an Area (Repository or Pipeline) and keep choosing until an option is marked [valid]. Several " +
-      "levels can be valid at once. Pasting a full in-project URL pre-selects the closest match."
-  );
-  para(
-    "Add link keeps your selections and clears only the slug, so several links can be created " +
-      "quickly; Clear resets everything."
-  );
-
-  heading("Dynamic links");
-  para(
-    "A link can point at a changing target. Its URL contains the token {{dyn}} and stores how to " +
-      "resolve it:"
-  );
-  list([
-    "Repository: newest / oldest open pull request, or the latest commit on a branch.",
-    "Pipeline: latest / latest succeeded / latest failed build (needs the Build (read) permission)."
-  ]);
-  para("If a dynamic target cannot be resolved, a clear message is shown instead of a broken link.");
-
-  heading("Trash");
-  para(
-    "Deleted pages and links go to a shared Trash for 5 days, where they can be restored or deleted " +
-      "immediately. Slugs stay reserved while trashed."
-  );
-
-  heading("Permissions");
-  list([
-    "Reading Pages/Links/PR/Repos needs normal project read access.",
-    "Managing them requires project administrator.",
-    "The pipeline task uses System.AccessToken."
-  ]);
-
-  return wrap;
-}
 
 /** Pipelines tab: pipelines with a "Create Link type" dropdown + Create. */
 function buildPipelinesSection(): HTMLElement {
@@ -696,7 +615,7 @@ function switchToLinksAndParse(): void {
   if (nav) {
     try {
       nav.navigate(pagesProjectSettingsUrl(projectName()) + "#links");
-    } catch (error) {
+    } catch {
       // Fall through to an in-place switch.
     }
   }
@@ -1088,55 +1007,6 @@ async function onPurge(entry: TrashEntry): Promise<void> {
 }
 
 /** Builds the trash table with restore and delete-instantly actions. */
-function buildTrashTable(): HTMLElement {
-  const table = el("table", "data-table");
-  const head = el("thead");
-  const headRow = el("tr");
-  ["Name", "Slug", "Deleted", "Permanent delete by"].forEach((label) =>
-    headRow.appendChild(el("th", undefined, label))
-  );
-  head.appendChild(headRow);
-  table.appendChild(head);
-
-  const body = el("tbody");
-  table.appendChild(body);
-
-  const trash = (index.trash || [])
-    .slice()
-    .sort((a, b) => b.deletedUtc.localeCompare(a.deletedUtc));
-  if (trash.length === 0) {
-    const row = el("tr");
-    const cell = el("td", "empty", "Trash is empty.");
-    cell.colSpan = 4;
-    row.appendChild(cell);
-    body.appendChild(row);
-    return table;
-  }
-
-  trash.forEach((entry) => {
-    const row = el("tr", "data-row");
-    row.appendChild(el("td", undefined, entry.page.name));
-    row.appendChild(el("td", "mono", entry.page.slug));
-    row.appendChild(
-      el("td", undefined, entry.deletedUtc + (entry.deletedBy ? ` (${entry.deletedBy})` : ""))
-    );
-    row.appendChild(el("td", "col-nowrap", trashExpiryUtc(entry.deletedUtc) || "-"));
-    body.appendChild(row);
-
-    // Restore / Delete instantly on their own row, left-aligned (see the pages table).
-    const actionsRow = el("tr", "actions-row");
-    const actionsCell = el("td");
-    actionsCell.colSpan = 4;
-    const box = el("div", "row-actions");
-    box.appendChild(rowButton("Restore", () => void onRestore(entry.trashId)));
-    box.appendChild(rowButton("Delete instantly", () => void onPurge(entry)));
-    actionsCell.appendChild(box);
-    actionsRow.appendChild(actionsCell);
-    body.appendChild(actionsRow);
-  });
-
-  return table;
-}
 
 /** Swaps the order of a page with its neighbour in the given direction (-1 up, +1 down). */
 async function onMove(pages: PageMetadata[], at: number, direction: number): Promise<void> {
@@ -1684,7 +1554,7 @@ async function resolvePastedNames(
     names.stage = stage && stage.name;
     names.job = job && job.name;
     names.task = task && task.name;
-  } catch (error) {
+  } catch {
     // Without the timeline we match a plain view and keep the raw ids as fixed params.
   }
   return names;
@@ -1754,20 +1624,6 @@ function viewLabel(view: string): string {
 }
 
 /** Maps a build "view" query value to a builder view option key. */
-function viewOptionKey(view?: string): string {
-  switch (view) {
-    case "results":
-      return "view:results";
-    case "codecoverage-tab":
-      return "view:coverage";
-    case "artifacts":
-      return "view:artifacts";
-    case "logs":
-      return "view:logs";
-    default:
-      return "";
-  }
-}
 
 /** Pre-selects Area = Repository and the repository; restores the dynamic leaf for a token URL. */
 async function autoSelectRepo(
@@ -2056,52 +1912,6 @@ function buildLinkTable(): HTMLElement {
 }
 
 /** Builds the links trash table with restore and delete-instantly actions. */
-function buildLinkTrashTable(): HTMLElement {
-  const table = el("table", "data-table");
-  const head = el("thead");
-  const headRow = el("tr");
-  ["Title", "Slug", "Deleted", "Permanent delete by"].forEach((label) => headRow.appendChild(el("th", undefined, label)));
-  head.appendChild(headRow);
-  table.appendChild(head);
-
-  const body = el("tbody");
-  table.appendChild(body);
-
-  const trash = (links.trash || [])
-    .slice()
-    .sort((a, b) => b.deletedUtc.localeCompare(a.deletedUtc));
-  if (trash.length === 0) {
-    const row = el("tr");
-    const cell = el("td", "empty", "Links trash is empty.");
-    cell.colSpan = 4;
-    row.appendChild(cell);
-    body.appendChild(row);
-    return table;
-  }
-
-  trash.forEach((entry) => {
-    const row = el("tr", "data-row");
-    row.appendChild(el("td", undefined, entry.link.title));
-    row.appendChild(el("td", "mono", entry.link.slug));
-    row.appendChild(
-      el("td", undefined, entry.deletedUtc + (entry.deletedBy ? ` (${entry.deletedBy})` : ""))
-    );
-    row.appendChild(el("td", "col-nowrap", trashExpiryUtc(entry.deletedUtc) || "-"));
-    body.appendChild(row);
-
-    const actionsRow = el("tr", "actions-row");
-    const actionsCell = el("td");
-    actionsCell.colSpan = 4;
-    const box = el("div", "row-actions");
-    box.appendChild(rowButton("Restore", () => void onRestoreLink(entry.trashId)));
-    box.appendChild(rowButton("Delete instantly", () => void onPurgeLink(entry)));
-    actionsCell.appendChild(box);
-    actionsRow.appendChild(actionsCell);
-    body.appendChild(actionsRow);
-  });
-
-  return table;
-}
 
 /** Short Area label for a link (Repo/PR/Pipeline/Artifact/Fixed). */
 function areaLabel(link: LinkEntry): string {

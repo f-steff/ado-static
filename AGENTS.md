@@ -46,6 +46,11 @@ Before finishing any change, scan for accidental instance identifiers.
 
 ## 3. Build, packaging, releases and CI
 
+- **Local gate first (mandatory).** Run the whole gate locally and fix **every** warning *before*
+  pushing: `npx tsc --noEmit`, `npm run lint`, `npm test`, `npm run verify:clean`,
+  `npm run build:prod`. `npm run lint` runs with `--max-warnings 0`, so a warning is a failure.
+  Then watch the pipeline run and fix anything it reports. No warning may reach `main` or `develop`:
+  GitHub annotates every one of them on the run, and they drown the real errors.
 - Follow [`README.md`](README.md) for install/build/test/package steps.
 - Do not commit build output (`dist/`), `node_modules/`, or generated `.vsix` files.
 - **Editions**: one code base, two Marketplace editions under the publisher `f-steff`: `static`
@@ -54,9 +59,13 @@ Before finishing any change, scan for accidental instance identifiers.
 - **Branches**: `main` (stable) and `develop` (dev). `main` is protected (PR + CI required); merge
   `develop` -> `main` to release.
 - **Pipelines**: only `.github/workflows/`. Reusable helper scripts live in `ci/`.
-- **Versions** are derived from git tags: minor bumps (revision resets) on merge to `main`; revision
-  bumps on merge to `develop`; every published version is tagged `vX.Y.Z`. See
-  [`MIGRATION.md`](MIGRATION.md).
+- **Versions**: both editions share one tag sequence - a release publishes *both* at the same version,
+  and a `develop` merge publishes the next revision of the released minor. See
+  [`docs/10-development.md`](docs/10-development.md#versioning); the bump rules live in
+  `ci/version.mjs` and are unit-tested.
+- **Runners and actions**: pin the runner image (`ubuntu-24.04`) and use action majors that run on the
+  current Node (see the workflows) - `ubuntu-latest` and Node-20 action majors both raise deprecation
+  annotations on every run.
 - **Identifier scan**: run `npm run verify:clean` before pushing; CI runs it too.
 
 ---
@@ -91,9 +100,11 @@ emoji. Use `-`, `...`, `->`, `<=`, `+--+`, etc. instead.
 
 Every change must be covered by tests, and **every version must be tested against the plan**.
 
-- **Automated tests:** add cases to [`tests/logic.test.ts`](tests/logic.test.ts) and keep
-  `npm test` green. New pure logic (parsers, formatters, URL handling, validators) must have
-  tests. `npm test` + `npx tsc --noEmit` are the gate: no build/upload without them passing.
+- **Automated tests:** add cases to [`tests/logic.test.ts`](tests/logic.test.ts) (plus the plain-JS
+  suites for the pipeline tasks and the CI helpers) and keep `npm test` green. New pure logic
+  (parsers, formatters, URL handling, validators) must have tests. The gate is
+  `npx tsc --noEmit` + `npm run lint` + `npm test` + `npm run verify:clean` + `npm run build:prod`:
+  no push, and no build/upload, without all of them passing.
 - **Test plan:** maintain [`docs/13-test-plan.md`](docs/13-test-plan.md). When a feature is added
   or changed, add or update its case(s) there **in the same change**.
 - **Run the plan every version:** perform the automated and integration cases, record results per

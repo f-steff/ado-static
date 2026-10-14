@@ -1,6 +1,6 @@
 import * as SDK from "azure-devops-extension-sdk";
 
-import { LinkEntry, LinkIndex, emptyLinks, getLinks, purgeExpiredLinks } from "../common/data-service";
+import { LinkEntry, LinkIndex, emptyLinks, purgeExpiredLinks } from "../common/data-service";
 import { getHeading, iconFor } from "../common/branding";
 import { linkAreaLabel } from "../common/link-url";
 import { resolveLink } from "../common/dynamic-resolve";

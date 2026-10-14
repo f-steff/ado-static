@@ -71,7 +71,7 @@ async function repositories(): Promise<BuilderOption[]> {
         url: "",
         loadChildren: async () => repositoryChildren(repo)
       }));
-  } catch (error) {
+  } catch {
     return [];
   }
 }
@@ -152,7 +152,7 @@ async function repositoryChildren(repo: RepositoryInfo): Promise<BuilderOption[]
         terminal: true
       });
     });
-  } catch (error) {
+  } catch {
     // A missing Git permission just omits the named PRs; the other targets still work.
   }
   return options;
@@ -168,7 +168,7 @@ async function pipelines(): Promise<BuilderOption[]> {
       url: "",
       loadChildren: async () => buildModes(definition.id)
     }));
-  } catch (error) {
+  } catch {
     return [];
   }
 }
@@ -212,7 +212,7 @@ async function buildNumbers(definitionId: number): Promise<BuilderOption[]> {
       terminal: true,
       loadChildren: async () => buildTargets(build.id)
     }));
-  } catch (error) {
+  } catch {
     return [];
   }
 }
@@ -238,7 +238,7 @@ export async function buildTargets(buildId?: number): Promise<BuilderOption[]> {
   let records: TimelineRecord[] = [];
   try {
     records = await timeline(buildId);
-  } catch (error) {
+  } catch {
     return views;
   }
 
