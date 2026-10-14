@@ -1,0 +1,13 @@
+# Normalize line endings: store LF in the repository and check it out as LF on every platform.
+#
+# Rationale: the same tree is edited on Windows and built/tested on Linux CI runners (plus Windows
+# agents for the pipeline tasks), so one convention removes the "LF will be replaced by CRLF" churn
+# that `core.autocrlf=true` produces for every file a tool rewrites, and keeps diffs, blob hashes and
+# the packaged VSIX identical across machines.
+* text=auto eol=lf
+
+# Binary assets are never converted (git normally detects these, but being explicit removes any
+# smudge/clean surprise in a package we publish).
+*.png binary
+*.vsix binary
+*.zip binary

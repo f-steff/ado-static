@@ -93,10 +93,10 @@ Workflows live in `.github/workflows/` (GitHub's requirement):
 - `publish-stable.yml` - on push to `main`: publish the stable edition.
 - `share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with an organization.
 
-A publish is skipped when **every** changed path in the push is documentation, tests or CI
-configuration (`paths-ignore`) - such a push cannot change the shipped extension, so it must not mint
-a version. `overview.md` and `LICENSE` are packaged into the VSIX and are deliberately **not**
-ignored, and a mixed push still publishes.
+A publish is skipped when **every** changed path in the push is documentation, tests, CI
+configuration or repository housekeeping (`paths-ignore`) - such a push cannot change the shipped
+extension, so it must not mint a version. `overview.md` and `LICENSE` are packaged into the VSIX and
+are deliberately **not** ignored, and a mixed push still publishes.
 
 ## Versioning
 
