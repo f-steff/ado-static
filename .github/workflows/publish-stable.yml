@@ -28,6 +28,7 @@ on:
       - 'AGENTS.md'
       - 'tests/**'
       - '.gitattributes'
+      - '.gitignore'
       - '.github/**'
 
 run-name: "Publish stable (release)"

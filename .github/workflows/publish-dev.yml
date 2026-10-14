@@ -28,6 +28,7 @@ on:
       - 'AGENTS.md'
       - 'tests/**'
       - '.gitattributes'
+      - '.gitignore'
       - '.github/**'
   # Manual run: publishes the computed next version, or `version` when given. Used to re-publish after
   # a failed publish, or to align the dev edition with a release that predates the dual publish.
