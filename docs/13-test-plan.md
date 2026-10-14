@@ -518,6 +518,15 @@ performs the restore and the status line then reports `Restored N project(s), M 
 confirmation was visible from the start with no question, because `[hidden]` was outranked by the
 row's `display`.)
 
+### TC-79  -  A release publishes both editions at one version  (process, D24)
+Merge `develop` into `main`.
+**Expected:** the run computes `0.<minor + 1>.0`, publishes the **stable** edition, tags it, then
+publishes the **dev** edition at the **same** version (the Marketplace shows both editions at that
+version, and the dev edition then moves to `<minor>.<revision + 1>` on the next `develop` merge); the
+two publish workflows share one concurrency group, so they cannot interleave on the tag sequence; a
+manual *Publish dev* run with a `version` input publishes exactly that version and skips tagging when
+the tag already exists. (Automated: the bump rules are covered by `tests/version.test.mjs`.)
+
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
 **Expected:** the table shows a **Permanent delete by** column (`deletedUtc` + 5 days). Retention is
