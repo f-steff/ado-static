@@ -26,7 +26,8 @@ const result = spawnSync(
         outFile,
         path.join(rootDir, "tests", "tasks.test.js"),
         path.join(rootDir, "tests", "version.test.mjs"),
-        path.join(rootDir, "tests", "shared-with.test.mjs")
+        path.join(rootDir, "tests", "shared-with.test.mjs"),
+        path.join(rootDir, "tests", "dispatch-input.test.mjs")
     ],
     { stdio: "inherit" }
 );
