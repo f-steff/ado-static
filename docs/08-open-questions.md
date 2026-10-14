@@ -79,14 +79,31 @@ stable); create a **GitHub Release only for stable tags**, using the same file t
 (build once, reuse it) plus a `SHA256SUMS` and a note that the Marketplace is the only supported
 install path; name development assets `static-dev-<version>.vsix` and never attach them to a Release.
 
+### Publisher verification (the badge) and the flaky Details tab
+
+Kept from the migration notes, because it explains why the verified-publisher badge is still pending.
+
+- Verification is a **trust badge, not a publish gate** - publishing (including going public) works
+  without it.
+- Prerequisites: at least one **published extension for 6+ months**, and a **domain registered 6+
+  months** ago.
+- Flow: open the publisher's **Details** tab, save the domain, then add a **DNS TXT record** of the
+  form `_visual-studio-marketplace-<publisher>.<domain>`.
+- **Known fault:** on the publisher account the Details tab does not work - on page load
+  `GET /_apis/gallery/publishers/<publisher>/azurepublisher` returns 404, and pressing Save fires no
+  request, so no Details field persists. Believed to be a partially provisioned publisher / Entra ID
+  (Azure AD) namespace association. It does not block publishing.
+- Revisit before applying for the badge; if it persists, raise it with Marketplace publisher support
+  rather than working around it.
+
 ## Risks
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | Extension Data size ceiling too small for huge reports | A very large page can't be stored | Chunk + compress; a clear failure when a chunk still exceeds the limit. |
 | Publish races / partial writes | Corrupt or stale pages | Content-first ordering; `__etag` read-modify-write; reconciliation. |
-| Azure DevOps global PAT retirement (2026-12-01) | Publish pipeline breaks | Migrate publishing to Microsoft Entra ID (GitHub OIDC) before then. |
-| Marketplace publisher verification pending | Only the "verified" badge; the public listing may wait for it | Publisher created; verification is a background to-do. |
+| Azure DevOps global PAT retirement (2026-12-01) | Publish pipeline breaks | Migrate publishing to Microsoft Entra ID via GitHub OIDC **before then**: a service principal added as a publisher member, so no long-lived secret is stored. |
+| Marketplace publisher verification pending | Only the "verified" badge; not a publish gate | Prerequisites (6+ months published, 6+ months domain) plus a known publisher-side Details-tab fault - see the research note on publisher verification below. |
 | Public projects unsupported | Audience limitation | Scope v1 to private projects; document. |
 
 ## Resolved-by-design notes
