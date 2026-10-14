@@ -66,9 +66,13 @@ jobs:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
           ADO_SHARE_ORGS: ${{ inputs.organization }}
         run: node scripts/tfx.js ${{ inputs.action }} dev
-      # Report the count only: the names must not appear in a public run summary.
+      # Report the count only: the names must not appear in a public run summary. This step never
+      # fails the run (sharing has already been decided) and it reads the list with tfx directly, so
+      # the workflow depends on nothing beyond `.github/**` and `ci/shared-with.mjs` - a branch that
+      # lacks even those still shares successfully and just says so.
       - name: Report how many organizations have access
         if: always()
+        continue-on-error: true
         env:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
         run: |
@@ -79,7 +83,8 @@ jobs:
             echo ""
             echo "Organizations that may install the dev edition, read back from the Marketplace:"
             echo ""
-            node scripts/tfx.js show dev | node ci/shared-with.mjs
+            node ci/shared-with.mjs < <(npx tfx-cli extension show --publisher f-steff --extension-id static-dev --json --token "$TFS_PAT" 2>/dev/null) 2>/dev/null \
+              || echo "_Could not read the access list from the Marketplace._"
             echo ""
             echo "Names are visible to the publisher: https://marketplace.visualstudio.com/manage/publishers/f-steff"
           } >> "$GITHUB_STEP_SUMMARY"

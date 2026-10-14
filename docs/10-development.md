@@ -153,7 +153,9 @@ computed inside the job cannot appear in the Actions list. The workflows compens
   (and therefore every run name, step name, log line and run summary) is public, so the organization
   comes from a dispatch input and is registered with `::add-mask::` before use - which also redacts
   tfx's own `Sharing extension with ...` output. The names are visible to the publisher on the
-  Marketplace publisher page, which is the only record of them.
+  Marketplace publisher page, which is the only record of them. The reporting step is
+  **non-fatal** (`continue-on-error`) and needs only `.github/**` and `ci/shared-with.mjs`, so a
+  branch that is missing either still completes its share or unshare and simply reports less.
 
 A publish is skipped when **every** changed path in the push is documentation, the CI/release
 scripts (`ci/**`), tests, or repository housekeeping (`paths-ignore`) - such a push cannot change the
