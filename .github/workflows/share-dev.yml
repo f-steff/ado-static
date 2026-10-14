@@ -4,22 +4,27 @@ name: Share dev
 #
 # Rationale: the organization is a workflow input rather than a stored secret or variable, so there is
 # nothing to keep a record of; the Marketplace retains the sharing list across version publishes, so
-# this only needs running when an organization is added or removed. The workflow then reports the
-# full list, read back from the Marketplace, so the run itself answers "who has access?" - the only
-# authoritative record, since the extension deliberately keeps no copy.
+# this only needs running when an organization is added or removed.
 #
-# The `workflow_dispatch` form is populated from the default branch, and a dispatch runs the file at
-# the ref you pick - so until these pinned action versions reach `main` (the next release brings them
-# over), dispatch from `develop`:
+# Confidentiality: this repository - and therefore every run name, step name, log line and run summary -
+# is public, so the organization is treated as secret material at run time:
+#   - the run name and the step names never contain it;
+#   - it is registered with `::add-mask::` before it is used, so tfx's own output ("Sharing extension
+#     with ...", the "Shared with" list) is redacted;
+#   - the summary reports only HOW MANY organizations currently have access; the names are visible to
+#     the publisher on the Marketplace publisher page, which is the only record of them.
+# The `workflow_dispatch` form is populated from the default branch, and a dispatch runs the file at the
+# ref you pick - so dispatch this from `develop` until the masking reaches `main` (the next release
+# brings it over, or a workflow-only sync):
 #   gh workflow run share-dev.yml --repo f-steff/ado-static --ref develop \
 #     -f organization=<org> -f action=share
-# Running it from `main` executes the older copy of this file, whose `actions/checkout@v4` and
-# `actions/setup-node@v4` raise a Node.js 20 deprecation annotation on every run.
+# Running it from `main` executes that branch's copy of this file, which still interpolates the
+# organization into a step name and prints it - exactly what this version fixes.
 on:
   workflow_dispatch:
     inputs:
       organization:
-        description: "Azure DevOps organization to share with / unshare from"
+        description: "Azure DevOps organization to share with / unshare from (masked in the run output)"
         required: true
       action:
         description: "Whether to share or unshare"
@@ -30,7 +35,7 @@ on:
           - share
           - unshare
 
-run-name: "${{ inputs.action }} dev: ${{ inputs.organization }}"
+run-name: "${{ inputs.action }} dev"
 
 # Read-only: sharing changes nothing in the repository.
 permissions:
@@ -47,16 +52,22 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      # Mask the organization before anything can print it. The value travels only through the
+      # environment, so the script text in the log stays literal and the runner redacts the value from
+      # here on - including the output of the next step.
+      - name: Treat the organization as secret
+        env:
+          ORGANIZATION: ${{ inputs.organization }}
+        run: echo "::add-mask::$ORGANIZATION"
       # The organization is passed through ADO_SHARE_ORGS; scripts/tfx.js splits it on commas or
       # whitespace and shares/unshares the dev manifest's publisher + id.
-      - name: ${{ inputs.action }} ${{ inputs.organization }}
+      - name: ${{ inputs.action }} the requested organization
         env:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
           ADO_SHARE_ORGS: ${{ inputs.organization }}
         run: node scripts/tfx.js ${{ inputs.action }} dev
-      # Report the full list afterwards: tfx `show` returns the extension info, whose `sharedWith`
-      # array names every organization that may install the private edition.
-      - name: Report who has access
+      # Report the count only: the names must not appear in a public run summary.
+      - name: Report how many organizations have access
         if: always()
         env:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
@@ -64,11 +75,11 @@ jobs:
           {
             echo "## Static (Dev) access"
             echo ""
-            echo "This run: \`${{ inputs.action }}\` **${{ inputs.organization }}**"
+            echo "Action: \`${{ inputs.action }}\` (the organization is masked in this run's output)."
             echo ""
-            echo "Organizations the extension is currently shared with (read back from the Marketplace):"
+            echo "Organizations that may install the dev edition, read back from the Marketplace:"
             echo ""
             node scripts/tfx.js show dev | node ci/shared-with.mjs
             echo ""
-            echo "The same list in the UI (sign in as the publisher): https://marketplace.visualstudio.com/manage/publishers/f-steff"
+            echo "Names are visible to the publisher: https://marketplace.visualstudio.com/manage/publishers/f-steff"
           } >> "$GITHUB_STEP_SUMMARY"
