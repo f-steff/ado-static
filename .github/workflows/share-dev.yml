@@ -8,10 +8,13 @@ name: Share dev
 # full list, read back from the Marketplace, so the run itself answers "who has access?" - the only
 # authoritative record, since the extension deliberately keeps no copy.
 #
-# The `workflow_dispatch` form is populated from the default branch, so until this file reaches `main`
-# dispatch it from the CLI:
+# The `workflow_dispatch` form is populated from the default branch, and a dispatch runs the file at
+# the ref you pick - so until these pinned action versions reach `main` (the next release brings them
+# over), dispatch from `develop`:
 #   gh workflow run share-dev.yml --repo f-steff/ado-static --ref develop \
 #     -f organization=<org> -f action=share
+# Running it from `main` executes the older copy of this file, whose `actions/checkout@v4` and
+# `actions/setup-node@v4` raise a Node.js 20 deprecation annotation on every run.
 on:
   workflow_dispatch:
     inputs:

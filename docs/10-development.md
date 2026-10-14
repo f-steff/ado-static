@@ -98,6 +98,12 @@ ado-static/
   dev tags (`v0.0.x`, `v0.1.1` and later) on `develop`. A tag is only visible in a Git UI when the
   branch containing its commit is selected - so `v0.1.0` shows under `main`, not under `develop`.
   Releases from the fix onwards tag `main`'s merge commit, and `main` genuinely contains `develop`.
+- A workflow runs the file **at the ref it was dispatched on**, and the `workflow_dispatch` UI defaults
+  to the default branch. So while `main` still carries the pre-release workflow files, a manual
+  dispatch from `main` runs those older definitions - for example `actions/checkout@v4` /
+  `actions/setup-node@v4`, which raise a Node.js 20 deprecation annotation. Pick `develop` (or
+  `--ref develop`), or sync the non-shipping workflow files to `main` with a housekeeping-only change:
+  because `.github/**` is in `paths-ignore`, that publishes nothing.
 
 ## CI
 
