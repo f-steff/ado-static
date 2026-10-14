@@ -10,6 +10,25 @@
 import { pathToFileURL } from "node:url";
 
 /**
+ * Parses `tfx extension show` output.
+ * Rationale: tfx prints its banner ("TFS Cross Platform Command Line Interface ...") and operation
+ * text around the JSON, so a plain `JSON.parse` of stdout fails - the object has to be extracted.
+ * Exported for the tests, which pin the banner case.
+ */
+export function parseExtensionInfo(text) {
+  const first = (text || "").indexOf("{");
+  const last = (text || "").lastIndexOf("}");
+  if (first < 0 || last <= first) {
+    return null;
+  }
+  try {
+    return JSON.parse(text.slice(first, last + 1));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Summarises an extension-info object as a count of organizations that have access.
  * Pure, so it can be unit-tested; accepts the parsed JSON (or null when unreadable).
  */
@@ -32,13 +51,7 @@ async function main() {
   for await (const chunk of process.stdin) {
     input += chunk;
   }
-  let parsed = null;
-  try {
-    parsed = JSON.parse(input);
-  } catch {
-    parsed = null;
-  }
-  console.log(summariseSharedWith(parsed));
+  console.log(summariseSharedWith(parseExtensionInfo(input)));
 }
 
 // Only run as a CLI: importing the helper (unit tests) must not consume stdin.
