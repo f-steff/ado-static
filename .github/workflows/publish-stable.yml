@@ -1,19 +1,24 @@
 name: Publish stable
 
-# Publish the public stable edition when `main` is merged.
-# Rationale: the version is derived from git tags, then the published version is tagged. The
-# `MARKETPLACE_PAT` secret holds a Marketplace (Manage) token.
+# Publish the public stable edition, and the dev edition at the SAME version.
 #
-# `paths-ignore` rationale: a push whose every changed path is documentation, tests or CI
-# configuration cannot change the shipped extension, so it must not mint a release version. Note that
-# `overview.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored - and a mixed
-# push still publishes, because every path must match to skip.
+# Rationale: both editions share one tag sequence, so a release publishes both at the same version.
+# That way a tester on the dev edition is running exactly the released code on release day, and the
+# numbers line up (both 0.2.0, then dev moves to 0.2.1 as `develop` advances). The tag is pushed
+# BEFORE the dev publish: if that publish fails the sequence has still advanced, otherwise the next
+# release would compute the same version and the Marketplace would reject it.
+#
+# `paths-ignore`: a push whose every changed path is documentation, the CI/release scripts, tests, or
+# repository housekeeping cannot change the shipped extension, so it must not mint a version.
+# `overview.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored; neither is
+# `scripts/**`, because that tooling decides what goes into the package.
 on:
   push:
     branches:
       - main
     paths-ignore:
       - 'docs/**'
+      - 'ci/**'
       - 'README.md'
       - 'AGENTS.md'
       - 'tests/**'
@@ -24,9 +29,10 @@ on:
 permissions:
   contents: write
 
-# Serialize publishes so two merges cannot compute the same version.
+# Serialize with the dev publish: the two editions share one tag sequence, so publishes must not
+# interleave. A queued run recomputes its version from the tags when it starts.
 concurrency:
-  group: publish-stable
+  group: marketplace-publish
   cancel-in-progress: false
 
 jobs:
@@ -52,7 +58,8 @@ jobs:
           npm run verify:clean
       - name: Compute version
         id: version
-        run: node ci/version.mjs stable --write | tee -a "$GITHUB_OUTPUT"
+        # --write-all sets the same version in both override manifests.
+        run: node ci/version.mjs stable --write-all | tee -a "$GITHUB_OUTPUT"
       - name: Build (production)
         run: npm run build:prod
       - name: Publish stable extension
@@ -65,3 +72,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ steps.version.outputs.tag }}" -m "Static ${{ steps.version.outputs.version }}"
           git push origin "${{ steps.version.outputs.tag }}"
+      # The same build with the dev manifest, so the released code is testable under the dev edition
+      # and both editions carry the same version until `develop` moves on.
+      - name: Publish dev edition at the same version
+        env:
+          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
+        run: npm run publish:dev

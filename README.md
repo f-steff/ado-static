@@ -109,14 +109,17 @@ There are two Marketplace editions of the same code, under one publisher:
   organization is a separate, explicit step: run the **Share dev** workflow and give the
   organization as an input (nothing is stored in the repository). The Marketplace retains the
   sharing list across version publishes.
-- Merging to **`main`** publishes the **stable** edition.
+- Merging to **`main`** publishes the **stable** edition - and the **same build as the dev edition**
+  at the same version, so a tester is running exactly the released code on release day.
 
-Versions are derived from git tags and every published version is tagged:
+Versions are derived from git tags, and both editions share one sequence; every published version is
+tagged (annotated `vX.Y.Z`):
 
 - Major stays `0`.
-- **Minor** bumps (and the revision resets to 0) on each merge to `main`.
-- **Revision** bumps on each merge to `develop`.
-- Tags are annotated (`vX.Y.Z`); the first stable is `0.1.0`, the first dev is `0.0.1`.
+- **Stable** (`main`): the **minor** bumps and the revision resets to 0 - `0.2.0`.
+- **Dev** (`develop`): the **revision** bumps inside the release line - `0.2.1`, `0.2.2`, ... so a dev
+  version reads as "the current release plus N merges".
+- The first stable is `0.1.0`, the first dev is `0.0.1`.
 
 Publishing authenticates with a Marketplace token (`MARKETPLACE_PAT`). Azure DevOps global PATs are
 retired on 2026-12-01, so publishing is slated to move to Microsoft Entra ID (GitHub OIDC) before

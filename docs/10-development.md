@@ -93,20 +93,29 @@ Workflows live in `.github/workflows/` (GitHub's requirement):
 - `publish-stable.yml` - on push to `main`: publish the stable edition.
 - `share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with an organization.
 
-A publish is skipped when **every** changed path in the push is documentation, tests, CI
-configuration or repository housekeeping (`paths-ignore`) - such a push cannot change the shipped
-extension, so it must not mint a version. `overview.md` and `LICENSE` are packaged into the VSIX and
-are deliberately **not** ignored, and a mixed push still publishes.
+A publish is skipped when **every** changed path in the push is documentation, the CI/release
+scripts (`ci/**`), tests, or repository housekeeping (`paths-ignore`) - such a push cannot change the
+shipped extension, so it must not mint a version. `overview.md` and `LICENSE` are packaged into the
+VSIX and are deliberately **not** ignored; neither is `scripts/**`, because that tooling decides what
+ends up in the package. A mixed push still publishes.
 
 ## Versioning
 
-Versions are derived from git tags (see [README](../README.md)):
+Versions are derived from git tags (see [README](../README.md)); the rules live in
+[`ci/version.mjs`](../ci/version.mjs) and are unit-tested in
+[`tests/version.test.mjs`](../tests/version.test.mjs):
 
-- Major stays `0`; **minor** bumps and the revision resets to 0 on each merge to `main`;
-  **revision** bumps on each merge to `develop`.
+- Major stays `0`; both editions share **one** tag sequence.
+- **Stable** (`main`): the minor bumps, revision resets to 0 (`0.2.0`), and the release publishes
+  **both** editions at that version.
+- **Dev** (`develop`): the revision bumps inside the released minor (`0.2.1`, `0.2.2`, ...), so a dev
+  version reads as "the current release plus N merges".
 - The first stable is `0.1.0`; the first dev is `0.0.1`.
-- Each published version is tagged `vX.Y.Z` (annotated). The workflow computes the version, publishes,
-  then tags.
+- Each published version is tagged `vX.Y.Z` (annotated) **once**: a release tags before publishing the
+  dev edition, and the dev workflow skips a tag a release already created. The two publish workflows
+  share one concurrency group, so a queued run recomputes its version from the tags when it starts.
+- A **manual** run of *Publish dev* can pass a `version` input - for a re-publish, or to align the dev
+  edition with a release that predates the dual publish.
 
 ## Testing strategy
 
