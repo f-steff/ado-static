@@ -13,6 +13,9 @@ dist/
 # Downloaded Static backups (they contain real project data - never publishable)
 static-backup-*.zip
 
+# Local scratch folder: archived migration material and downloaded backups (real data)
+t/
+
 # Generated (merged) manifests from scripts/tfx.js
 .generated-*.json
 
