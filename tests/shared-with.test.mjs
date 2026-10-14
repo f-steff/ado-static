@@ -5,7 +5,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { summariseSharedWith } from "../ci/shared-with.mjs";
+import { summariseSharedWith, parseExtensionInfo } from "../ci/shared-with.mjs";
+
+test("parseExtensionInfo tolerates the banner tfx prints around the JSON", () => {
+  // tfx writes its banner and operation text to stdout, so the object has to be extracted.
+  const banner = "TFS Cross Platform Command Line Interface v0.24.2\nCopyright Microsoft Corporation\n";
+  const json = '{"id":"static-dev","sharedWith":[{"name":"contoso"}]}';
+  assert.deepEqual(parseExtensionInfo(`${banner}${json}\n=== Completed operation ===\n`), {
+    id: "static-dev",
+    sharedWith: [{ name: "contoso" }]
+  });
+  assert.deepEqual(parseExtensionInfo(json), { id: "static-dev", sharedWith: [{ name: "contoso" }] });
+  assert.equal(parseExtensionInfo("no json here"), null);
+  assert.equal(parseExtensionInfo(""), null);
+});
 
 test("summariseSharedWith counts the organizations without naming them", () => {
   const summary = summariseSharedWith({ sharedWith: [{ name: "contoso" }, { name: "SampleOrg" }] });
