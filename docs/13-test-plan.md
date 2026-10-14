@@ -545,6 +545,13 @@ Node major), no Ubuntu migration notice (the runner image is pinned to `ubuntu-2
 warnings (`npm run lint` fails on any warning, so one cannot reach a run).
 (Automated: `npm run lint` with `--max-warnings 0` is part of the local gate and of every workflow.)
 
+### TC-82  -  Only develop reaches main, and merged branches disappear  (process, D26)
+Open a pull request from a feature branch into `main`, then one from `develop` into `main`.
+**Expected:** the feature-branch pull request **fails the `release-source` check** ("Only the
+'develop' branch may be merged into 'main'") and cannot merge, while the `develop` -> `main` one
+passes; a pull request cannot merge before `build` succeeds; and once any pull request merges, GitHub
+deletes its head branch - `git ls-remote --heads` lists only `main` and `develop`.
+
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
 **Expected:** the table shows a **Permanent delete by** column (`deletedUtc` + 5 days). Retention is

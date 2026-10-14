@@ -56,8 +56,11 @@ Before finishing any change, scan for accidental instance identifiers.
 - **Editions**: one code base, two Marketplace editions under the publisher `f-steff`: `static`
   (stable, from `main`) and `static-dev` (private, from `develop`). Manifests are the shared base plus
   `azure-devops-extension-dev.json` / `azure-devops-extension-stable.json`.
-- **Branches**: `main` (stable) and `develop` (dev). Both are protected (PR + status checks + no
-  force-push + no deletion). PRs into `develop` are rebase-merged (flat history); a release **merges**
+- **Branches**: only `main` and `develop` are long-lived; a branch is deleted when its pull request
+  merges (`delete_branch_on_merge`). Both are protected - pull request required, the **`build`** check
+  required, no force-push, no deletion - and **`main` may only be reached from `develop`** (the
+  `release-guard` check fails any other pull request into `main`), so the flow is always
+  `feature/*` -> `develop` -> `main`. PRs into `develop` are rebase-merged; a release **merges**
   `develop` into `main` with a merge commit, so `main` contains every commit `develop` has and the
   release tag lands on that merge commit. Do **not** rebase-merge a release: it rewrites every SHA and
   forks the history (see [`docs/10-development.md`](docs/10-development.md#branching-and-releases)).
