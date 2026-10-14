@@ -84,8 +84,9 @@ function buildArgs(command, manifestFile) {
     return appendToken(args);
   }
   if (command === "show") {
-    // `show --json` is how the sharing list is read back: the Marketplace keeps it, and the extension
-    // info carries a `sharedWith` array (see ci/shared-with.mjs).
+    // Local convenience: prints the extension info (with the `sharedWith` list) for inspection. The
+    // share workflow calls tfx directly instead, so that it needs no `scripts/**` on the branch it
+    // runs from - see ci/shared-with.mjs.
     const manifest = readJson(manifestFile);
     return appendToken([
       "extension",
