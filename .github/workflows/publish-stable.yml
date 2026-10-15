@@ -98,6 +98,10 @@ jobs:
         run: |
           STABLE_VALIDATION="$(node scripts/tfx.js validate stable 2>&1 || true)"
           DEV_VALIDATION="$(node scripts/tfx.js validate dev 2>&1 || true)"
+          # Printed as well as collected: the run summary is not part of a run's log, so echoing it
+          # here is what makes the reported state checkable from outside.
+          echo "static: $STABLE_VALIDATION"
+          echo "static-dev: $DEV_VALIDATION"
           {
             echo ""
             echo "## Marketplace validation"
