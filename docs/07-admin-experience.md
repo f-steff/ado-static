@@ -150,10 +150,15 @@ stable data before a release) and doubles as a backup.
 | Capability | Required |
 | --- | --- |
 | View hubs / read a page | Normal project read access. |
-| Manage links/pages | Project administrator. |
+| Manage links/pages | Project administrator (the settings hub is only reachable via Project settings). |
+| Use the organization settings (Overview, Backup) | Collection administrator (the organization settings hub is only reachable there). |
 
 Enforcement: the settings hub is only reached via Project settings; data writes use the caller's
-token, so unauthorized writes fail server-side (defence in depth).
+token, so unauthorized writes fail server-side (defence in depth). What the UI *offers* is decided by
+the permission probes in [03](03-architecture.md#permission-aware-ui-d27): the project settings page
+hides its **Org.Settings** button when the caller cannot open the organization settings, and the Links
+hub tells a member who cannot open Project settings to ask an administrator instead of pointing them
+at a page they cannot reach.
 
 ## Accessibility and theming
 

@@ -40,6 +40,7 @@ import { formatBytes, formatBytesWhole } from "../common/format";
 import { trashExpiryUtc } from "../common/index-logic";
 import { RepositoryInfo, listRepositories } from "../common/git-service";
 import { getHostNavigation, hostNavigate, HostNavigationService } from "../common/host-nav";
+import { PermissionState, canAccessOrgSettings } from "../common/permissions";
 import { describeError, logError, logInfo } from "../common/log";
 import { slugError as validateSlug, slugify } from "../common/validation";
 
@@ -101,6 +102,10 @@ const builderMemory = new Map<string, string>();
 // when an earlier level changes (e.g. another build), the option keys of the later levels change
 // with it; matching by key re-selects the closest target by name (e.g. the same log target).
 const builderLevelMemory: string[] = [];
+// Whether the current user may open the organization settings. `null` means "could not be
+// evaluated" - the button is then shown, because the host denies it anyway and hiding it from a
+// collection administrator would be the worse failure.
+let canOpenOrgSettings: PermissionState = null;
 // The last log target the admin chose. Log targets are stored by NAME (token placeholders), so
 // this exact option can be carried forward unchanged when the pipeline/build/mode changes; it is
 // resolved (or reported missing) against the build the link points at when the link is opened.
@@ -134,7 +139,10 @@ const loadGuard = window.setTimeout(() => {
 SDK.ready()
   .then(async () => {
     try {
-      await load();
+      // Probe the organization-settings permission alongside the data load so the tab strip is
+      // rendered from the real answer on the first paint (no button appearing a moment later).
+      const [, orgAccess] = await Promise.all([load(), canAccessOrgSettings()]);
+      canOpenOrgSettings = orgAccess;
       // The active tab lives in the host hash so each tab is a distinct history entry: switching
       // is instant (a same-document hash change) and the browser Back button returns to the
       // previous tab.
@@ -227,8 +235,9 @@ function render(): void {
     ["about", "About", false]
   ];
   tabDefs.forEach(([id, label, right]) => {
-    // The Org.Settings button is not a tab: it leaves this page for the organization settings.
-    if (id === "about") {
+    // The Org.Settings button is not a tab: it leaves this page for the organization settings. It is
+    // only useful to a user who can open those settings, so a definite "no" hides it.
+    if (id === "about" && canOpenOrgSettings !== false) {
       const orgButton = el("button", "tab-action", "Org.Settings");
       orgButton.title = "Open the organization settings";
       orgButton.addEventListener("click", () => void hostNavigate(pagesOrgSettingsUrl()));

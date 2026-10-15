@@ -20,6 +20,7 @@ import {
     tokenizeUrl,
 } from "../src/common/dynamic-links";
 import { filterByName, matchesFilter } from "../src/common/filter";
+import { findActionBit, readPermissionValue } from "../src/common/permission-parse";
 import { buildViewSpecs, composePath, consumedParams, isFixedArea, targetMatches, viewKeyForValue } from "../src/common/builder-core";
 import { buildBundle, backupFileName, decodeBundle, encodeBundle, parseBundle } from "../src/common/backup";
 import { crc32, readZip, writeZip } from "../src/common/zip";
@@ -820,4 +821,37 @@ test("formatRelativeTime formats coarse all-time ages", () => {
     assert.equal(formatRelativeTime(ago(60 * 24 * 60 * 60 * 1000), now), "2 mo ago");
     // A future timestamp (clock skew) is clamped rather than shown as negative.
     assert.equal(formatRelativeTime(new Date(now + 60000).toISOString(), now), "just now");
+});
+
+// ---- Permission probes (PR: permission-aware visibility) ------------------------------------
+
+test("readPermissionValue reads every response shape the Security API returns", () => {
+    // Azure DevOps wraps the array in `{ count, value }`; the reference documents a bare array.
+    assert.equal(readPermissionValue({ count: 1, value: [true] }), true);
+    assert.equal(readPermissionValue({ count: 1, value: [false] }), false);
+    assert.equal(readPermissionValue([true]), true);
+    assert.equal(readPermissionValue(true), true);
+    // Anything unexpected is "unknown" (null) rather than a wrong answer.
+    assert.equal(readPermissionValue({ value: [] }), null);
+    assert.equal(readPermissionValue({ value: ["yes"] }), null);
+    assert.equal(readPermissionValue(undefined), null);
+    assert.equal(readPermissionValue(null), null);
+    assert.equal(readPermissionValue("true"), null);
+});
+
+test("findActionBit locates a namespace action by name, case-insensitively", () => {
+    const definition = {
+        actions: [
+            { name: "GenericRead", bit: 1, displayName: "View" },
+            { name: "MANAGE_PROPERTIES", bit: 16 }
+        ]
+    };
+    assert.equal(findActionBit(definition, "manage_properties"), 16);
+    assert.equal(findActionBit(definition, "GenericRead"), 1);
+    assert.equal(findActionBit(definition, "delete"), null);
+    // A malformed definition must not throw; the probe then reports "unknown".
+    assert.equal(findActionBit(null, "x"), null);
+    assert.equal(findActionBit({}, "x"), null);
+    assert.equal(findActionBit({ actions: [{ name: "x" }] }, "x"), null);
+    assert.equal(findActionBit({ actions: "nope" }, "x"), null);
 });

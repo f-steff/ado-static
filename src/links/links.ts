@@ -6,6 +6,7 @@ import { linkAreaLabel } from "../common/link-url";
 import { resolveLink } from "../common/dynamic-resolve";
 import { HUB_LINKS, pagesHubUrl } from "../common/extension-urls";
 import { getHostNavigation, HostNavigationService } from "../common/host-nav";
+import { PermissionState, canAccessProjectSettings } from "../common/permissions";
 import { logError, logInfo } from "../common/log";
 import { encodeQuery, withQueryParam } from "../common/urls";
 
@@ -23,6 +24,9 @@ const HUB_ID = HUB_LINKS;
 let nav: HostNavigationService;
 let index: LinkIndex = emptyLinks();
 let currentQuery: Record<string, string> = {};
+// Whether the current user may open this project's settings. Only the empty-state wording depends on
+// it (`null` = could not be evaluated, so the wording stays neutral).
+let canOpenProjectSettings: PermissionState = null;
 
 // `applyTheme: true` applies the user's theme (light/dark) variables to this document.
 SDK.init({ applyTheme: true });
@@ -50,8 +54,14 @@ SDK.ready()
       settled = true;
       window.clearTimeout(guard);
       SDK.notifyLoadSucceeded();
-      // Auto-purge links trashed more than the retention window ago, then render the list.
-      index = await purgeExpiredLinks(5);
+      // Auto-purge links trashed more than the retention window ago, then render the list. The
+      // permission probe runs alongside it: it only words the empty state, so it must not delay rows.
+      const [purged, projectSettings] = await Promise.all([
+        purgeExpiredLinks(5),
+        canAccessProjectSettings()
+      ]);
+      index = purged;
+      canOpenProjectSettings = projectSettings;
       await render();
       logInfo("Pages links hub ready.", { links: (index.links || []).length });
     } catch (error) {
@@ -155,7 +165,7 @@ function renderList(notice: string, loading = false): void {
     body.appendChild(row);
   } else if (links.length === 0) {
     const row = el("tr");
-    const cell = el("td", "empty", "No links yet. Add them under Project settings -> Pages.");
+    const cell = el("td", "empty", emptyMessage());
     cell.colSpan = 4;
     row.appendChild(cell);
     body.appendChild(row);
@@ -223,6 +233,18 @@ function version(): string {
 /** Short Area label for a link (Repo/PR/Pipeline/Artifact/Fixed). */
 function areaLabel(link: LinkEntry): string {
   return linkAreaLabel(link.url, link.area);
+}
+
+/**
+ * Empty-state wording for the project links table.
+ * Rationale: "add them under Project settings" is wrong advice for a member who cannot open those
+ * settings, so the message follows the permission probe (and stays neutral when it is unknown).
+ */
+function emptyMessage(): string {
+  if (canOpenProjectSettings === false) {
+    return "No links yet. Ask a project administrator to add them under Project settings -> Static -> Links.";
+  }
+  return "No links yet. Add them under Project settings -> Static -> Links.";
 }
 
 /** Renders a fatal error in place of the UI. */

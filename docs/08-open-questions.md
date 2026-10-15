@@ -31,6 +31,7 @@
 
 | D25 | The organizations the private dev edition is shared with are **confidential**: the share workflow takes the organization as a dispatch input, masks it with `::add-mask::` before use (which also redacts tfx's own output), and reports only a **count**; the names exist solely on the Marketplace publisher page. | OK |
 | D26 | Only `main` and `develop` are long-lived branches; a branch is deleted when its pull request merges, and `main` can only be reached from `develop` (enforced by the `release-guard` check). Both branches require a pull request and the `build` check. | OK |
+| D27 | Controls that only work for some users are **permission-aware**. The project settings page shows its **Org.Settings** button, and the Links hub words its empty state, from a Security REST probe of the caller (`GET /_apis/permissions/{namespaceId}/{bit}?alwaysAllowAdministrators=true`, the bit resolved from the namespace definition by action name). A probe that cannot be evaluated counts as **unknown** and the control stays visible: hiding something from a user who does have access is the worse failure, and the host denies the action anyway. | OK |
 
 ## Open questions
 
@@ -43,6 +44,7 @@
 | Q14 | Should content ever be shared across projects? | Scope model. | No for v1. |
 | Q15 | How should **multi-file pages** be supported? | Authoring model and effort. | v1 single file; then bundle/inline at publish; then a virtual file host. See [03](03-architecture.md#multi-file-pages). |
 | Q16 | Should the **published VSIX** also be attached as a workflow artifact and/or a GitHub Release? | Consumer verification, archival, and installs on on-premises servers (D21). | Cheap as a workflow artifact on every publish; a GitHub Release only for **stable** tags is the useful part. Research kept below; not scheduled. |
+| Q17 | The permission probes (D27) are only exercised with an **administrator** identity so far, which always answers "granted". | TC-83/TC-84 include the *negative* path. | Run them with a plain project member account; if a probe cannot be evaluated there, record `unknown` and keep the neutral wording. |
 
 Resolved questions (kept for context): dynamic sidebar children (D6); path vs query and round-trip
 (D7, D8); per-document size limit = 5,244,928 bytes (D12, [04](04-data-model.md)); publisher/ids
