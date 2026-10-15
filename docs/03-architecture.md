@@ -10,7 +10,7 @@
 | **Report tab (`reporttab`)** | Build results iframe | Render the HTML a `PublishPage@0` run attached (opt-in via `tabName`). |
 | **`PublishPage` task** | Build/release agent | Publish/update a page's content and, optionally, a build report tab. |
 | **`PublishLink` task** | Build/release agent | Create or update a fixed link. |
-| **Extension Data Service** | Azure DevOps | Persist project data (index, content, links) in the `Default/Current` scope, per-project collection `static-{projectId}`. |
+| **Extension Data Service** | Azure DevOps | Persist project data (index, content, links, proposals) in the `Default/Current` scope, per-project collection `static-{projectId}`; private links live in the `User/Me` scope of `static-{projectId}-private` ([04](04-data-model.md)). |
 | **Azure DevOps REST APIs** | Azure DevOps | Git (repos/commits/PRs) and Pipelines (definitions/builds/timelines) data for the hubs. |
 
 ```
@@ -177,4 +177,10 @@ Publish a page / report tab:  Pipeline -> PublishPage task
 
 Publish a link:  Pipeline -> PublishLink task
   read url or urlFile; upsert the link in the links document (area=fixed, source=pipeline)
+
+Private links and proposals:  Links hub -> private store -> project settings
+  hub: read the user's store (User/Me scope) + the project's proposal list; render both tables
+  Share: write a snapshot to `link-proposals` (state=open) and mark the private link `proposal`
+  settings: review the snapshot; Add to project creates a normal link, Reject marks the record
+  hub (next visit): reconcile() promotes (removes the private original) or marks the rejection
 ```

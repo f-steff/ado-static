@@ -39,6 +39,16 @@ function context(): { origin: string; organization: string; project: string; pre
   };
 }
 
+/**
+ * The Azure DevOps base URL of the current project.
+ * Rationale: a Static link must stay inside this project, so both the builder and the link editor
+ * need the same prefix; it is built from the host context once, here.
+ */
+export function projectBaseUrl(): string {
+  const c = context();
+  return `https://dev.azure.com/${c.organization}/${encodeURIComponent(c.project)}`;
+}
+
 /** URL of one of this extension's hub contributions in the current project. */
 export function pagesHubUrl(hubId: string): string {
   const c = context();

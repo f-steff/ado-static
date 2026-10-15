@@ -67,6 +67,9 @@ pure logic that previously had to be checked by hand:
 | AT-11 | URL helpers | `withQueryParam` insert/replace/remove while preserving others; hub/settings URL shapes | TC-16, TC-31 |
 | AT-12 | Filter | case-insensitive substring; input order preserved | TC-14, TC-15 |
 | AT-13 | Relative time | coarse ages; future timestamps clamped | TC-14 |
+| AT-14 | Permission payloads | `{count,value}` and bare-array responses; action lookup by name; malformed input -> `null` (unknown) | TC-83, TC-84 |
+| AT-15 | Private links | slug reservation across project + own links; proposal snapshot; promotion fields; acceptance guard (taken slug, bad URL) | TC-85, TC-88 |
+| AT-16 | Proposal reconciliation | open keeps its marker, accepted removes the private original, rejected marks it, a missing record is forgotten, an orphaned proposal is withdrawn, other members' proposals are untouched | TC-87..TC-89 |
 
 ## Test cases
 
@@ -567,6 +570,49 @@ Open Project settings -> Static as an administrator and as a plain project membe
 **Expected:** the **Org.Settings** button is present for a user who can open the organization settings
 and absent without that access; nothing else changes (a `false` probe removes only that button, and an
 unavailable probe leaves it visible so an administrator is never locked out).
+
+### TC-85  -  Private links: create, edit, delete  (FR-LINK, D28)
+In the Links hub, press **Add private link** and build a link (title, slug, URL or the cascading
+builder), then save; edit it (the slug is locked) and save; delete it and confirm.
+**Expected:** the private table exists under the project links with a **Status** column, and the
+**Edit / Delete / Share** icons stay on one row. Save returns to the list with the row present and
+persisted across a reload; an edit keeps the slug; delete removes only that row. Adding a slug that a
+project link or another private link already uses is refused with a link-specific message.
+(Automated: `slugTaken`; the editor's validation is shared with the settings page - TC-04/TC-05.)
+
+### TC-86  -  A private link is private  (D28)
+1. In the debug browser profile signed in as member A, create two private links.
+2. Reload the hub as member B (a second account) in the same project.
+**Expected:** member B sees **their own** private links (empty on a first visit) and never A's; the
+project links table is identical for both. Reading the store with A's token cannot return B's links,
+and vice versa. (MAN while only one identity exists - Q18.)
+
+### TC-87  -  Share offers a snapshot  (D28)
+Share a private link and confirm; then edit the private link's title/URL.
+**Expected:** the confirmation lists what is submitted (title, slug, URL, comment) and that the
+private copy stays until it is added. The row's Status becomes **Proposed - waiting for a decision**
+and its Share button is disabled. The project settings -> Links tab shows **Proposed links (1)** with
+the **original** title/URL (the later edit does not change the snapshot) and the proposer's name.
+
+### TC-88  -  Accepting promotes the link  (D28)
+On the settings page, press **Add to project** for a proposed link and confirm.
+**Expected:** a normal project link appears (View/Edit/Delete, and `proposedBy` recorded) that behaves
+exactly like an added link; the proposal disappears from the settings section; on the proposer's next
+hub load the private row is gone (promotion) and the project table shows the link. Pressing Add twice
+(or reloading mid-way) cannot create a duplicate.
+
+### TC-89  -  Rejecting returns the link  (D28)
+Propose a private link, then press **Reject** on the settings page and confirm.
+**Expected:** the proposal disappears from the settings section; the proposer's hub still shows the
+private link, now with **Not accepted. Edit it and share again.** The Share button is enabled again,
+and editing the link clears the message. A proposal whose slug was taken meanwhile shows why and
+offers only **Reject**.
+
+### TC-90  -  Private links stay out of backups  (D28)
+Create private links, propose one, then download an organization backup and inspect
+`static-backup.json`.
+**Expected:** the export contains the project collections only - no `private-links` and no
+`link-proposals`. Restoring that backup leaves every user's private links untouched.
 
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.

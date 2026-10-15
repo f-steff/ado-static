@@ -134,6 +134,14 @@ export function buildAbout(): HTMLElement {
   ]);
   para("If a dynamic target cannot be resolved, a clear message is shown instead of a broken link.");
 
+  heading("Links and private links");
+  para(
+    "Project links are curated in Project settings and are the same for everybody. Any member can also " +
+      "keep private links - visible only to them - from the Links hub, and share one with the project: it " +
+      "then appears under Project settings -> Links as a proposed link that someone with access to those " +
+      "settings can add or reject."
+  );
+
   heading("Trash");
   para(
     "Deleted pages and links go to a shared Trash for 5 days, where they can be restored or deleted " +
@@ -143,7 +151,9 @@ export function buildAbout(): HTMLElement {
   heading("Permissions");
   list([
     "Reading Pages/Links/PR/Repos needs normal project read access.",
-    "Managing them requires project administrator.",
+    "Project links and pages are managed in Project settings (project administrator); adding a link a " +
+      "member proposed happens there too.",
+    "Private links belong to the member who created them (they are stored per user).",
     "The pipeline task uses System.AccessToken."
   ]);
 

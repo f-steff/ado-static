@@ -16,9 +16,11 @@ export const RESERVED_SLUGS = ["static"];
  * Returns a validation message for a slug, or an empty string when acceptable.
  *
  * @param slug Incoming slug (may be empty while the user is still typing).
- * @param existing Slugs already used by other pages.
- * @param allowExisting True while editing an existing page (its own slug may be unchanged).
- */export function slugError(slug: string, existing: string[], allowExisting: boolean): string {
+ * @param existing Slugs already used by other records.
+ * @param allowExisting True while editing an existing record (its own slug may be unchanged).
+ * @param noun What the record is called in the message ("page" for pages, "link" for links).
+ */
+export function slugError(slug: string, existing: string[], allowExisting: boolean, noun = "page"): string {
   const value = (slug || "").trim();
   // Empty is "not yet valid" rather than "invalid", so no red error is shown while typing.
   if (!value) {
@@ -27,12 +29,12 @@ export const RESERVED_SLUGS = ["static"];
   if (!SLUG_PATTERN.test(value)) {
     return "Slug must be lowercase letters/numbers separated by single hyphens.";
   }
-  // Reserved slugs are only rejected for new pages; an existing page may keep its own slug.
+  // Reserved slugs are only rejected for new records; an existing one may keep its own slug.
   if (!allowExisting && RESERVED_SLUGS.includes(value)) {
     return "That slug is reserved.";
   }
   if (!allowExisting && existing.some((candidate) => candidate.toLowerCase() === value.toLowerCase())) {
-    return "A page with that slug already exists.";
+    return `A ${noun} with that slug already exists.`;
   }
   return "";
 }
