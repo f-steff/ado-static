@@ -140,6 +140,24 @@ The tasks write through `https://extmgmt.dev.azure.com/.../Collections/static-{p
 under the extension identity, so the token must be authorized for that extension's data. The
 token needs "Allow scripts to access the OAuth token" enabled on the pipeline.
 
+### Permission-aware UI (D27)
+
+The hubs are readable by every project member, so a control that only works for some of them must ask
+first. `src/common/permissions.ts` probes the **caller** with the documented Security REST API
+(`GET /_apis/permissions/{namespaceId}/{bit}?alwaysAllowAdministrators=true`), resolving the numeric
+bit from the namespace definition by action name; the response parsing is pure logic in
+`src/common/permission-parse.ts` (unit tested). Two probes exist:
+
+| Probe | Namespace | Action | Used for |
+| --- | --- | --- | --- |
+| `canAccessProjectSettings()` | Project | `MANAGE_PROPERTIES` (project token) | Wording the Links hub empty state for members who cannot open Project settings. |
+| `canAccessOrgSettings()` | Collection | `GENERIC_WRITE` | Showing or hiding the Org.Settings button on the project settings page. |
+
+A probe that cannot be evaluated returns `null` (**unknown**) and the caller keeps showing the
+control: hiding it from a user who does have access is the worse failure, and the host denies the
+action anyway. These probes decide **what the UI offers**, not what the service allows - the
+extension data service authorizes every write itself.
+
 ## Sequences
 
 ```

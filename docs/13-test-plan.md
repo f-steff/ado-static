@@ -30,6 +30,8 @@ not applicable, **MAN** = requires a human mouse (cross-origin iframe clicks can
 - Test projects: `SampleProject` (has pages/pipelines) and an empty project (for isolation checks).
 - The `sandbox` repo pipeline uses the task alias `PublishPage@0`.
 - A project-collection administrator account (for Project and Organization settings).
+- A **non-administrator** project member account: the negative half of the permission probes (Q17,
+  TC-83/TC-84) and, later, the private-link isolation checks can only be run with one.
 - Debug browser running (`chrome-live`), exactly one tab.
 
 ## Connections that must be exercised
@@ -551,6 +553,20 @@ Open a pull request from a feature branch into `main`, then one from `develop` i
 'develop' branch may be merged into 'main'") and cannot merge, while the `develop` -> `main` one
 passes; a pull request cannot merge before `build` succeeds; and once any pull request merges, GitHub
 deletes its head branch - `git ls-remote --heads` lists only `main` and `develop`.
+
+### TC-83  -  The Links hub hint follows project settings access  (FR-NAV-4, D27)
+Open the Links hub in a project with no project links, first as a user who can open Project settings
+and then as a plain project member.
+**Expected:** the first sees "No links yet. Add them under Project settings -> Static -> Links."; the
+member is told to ask a project administrator instead, so the hub never points at a page they cannot
+reach. When the probe cannot be evaluated the neutral wording appears - never a wrong instruction.
+(Q17: the member half needs a non-administrator identity.)
+
+### TC-84  -  The Org.Settings button follows organization settings access  (D27)
+Open Project settings -> Static as an administrator and as a plain project member.
+**Expected:** the **Org.Settings** button is present for a user who can open the organization settings
+and absent without that access; nothing else changes (a `false` probe removes only that button, and an
+unavailable probe leaves it visible so an administrator is never locked out).
 
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
