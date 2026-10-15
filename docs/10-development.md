@@ -125,7 +125,9 @@ Workflows live in `.github/workflows/` (GitHub's requirement):
 - `ci.yml` - on pull requests and pushes: install, lint, type check, test, `verify:clean`, build,
   and upload the VSIX as a build artifact (no publish).
 - `publish-dev.yml` - on push to `develop`, or manually with an optional `version`: publish the
-  private dev edition at the next revision of the released minor.
+  private dev edition at the next revision of the released minor. The tag is pushed as soon as the
+  **upload** is accepted (`--no-wait-validation`), and the asynchronous Marketplace validation is
+  reported into the run summary rather than gating the tag (D29).
 - `publish-stable.yml` - on push to `main`: publish the stable edition **and** the dev edition at the
   same version.
 - `share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with an organization and
