@@ -105,6 +105,25 @@ jobs:
             git tag -a "${{ steps.version.outputs.tag }}" -m "Static ${{ steps.version.outputs.version }}"
             git push origin "${{ steps.version.outputs.tag }}"
           fi
+      # Best effort: the upload is accepted and the tag is pushed, so the *asynchronous* Marketplace
+      # validation must never fail the run - a status poll once flaked and left a published version
+      # untagged (Q19/D29). The state goes into the summary instead.
+      - name: Report the validation state
+        if: always()
+        env:
+          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
+        run: |
+          VALIDATION="$(node scripts/tfx.js validate dev 2>&1 || true)"
+          {
+            echo ""
+            echo "## Marketplace validation"
+            echo ""
+            echo "The upload is what the tag depends on; this is the asynchronous check that follows it."
+            echo ""
+            echo '```'
+            echo "$VALIDATION"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       # Visible outcome: the run page gets a summary naming the version, and so does the commit.
       - name: Summarise what was published
         if: always()
