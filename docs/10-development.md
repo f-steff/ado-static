@@ -16,7 +16,8 @@ ado-static/
   ci/                # helper scripts used by the workflows (version, identifiers)
   scripts/           # build.js, serve.js, test.js, tfx.js
   src/
-    common/          # shared helpers (data-service, urls, ado-url, link-builder, ...)
+    common/          # shared helpers (data-service, urls, ado-url, link-builder, ...) and the
+                     # stylesheets entry points link (link-editor.css, dialog.css)
     hub/             # Pages hub (landing + sandboxed viewer)
     links/           # Links hub
     pipelines/       # Pipelines hub
