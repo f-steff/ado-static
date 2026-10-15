@@ -634,6 +634,19 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.2.3 (dev edition) - the styling fix, retested
+
+Retest of B8 on the deployed 0.2.3, in the same project and identity as the 0.2.2 run.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| B8 (retest) | OK | The hub's confirmation dialog now computes `position: fixed` over a 35% overlay with `z-index: 1000`, and the panel `border-radius: 6px`, `padding: 16px 20px`, `max-width: 460px` and a shadow; the message keeps its newlines (`white-space: pre-line`) |
+| B8 (no regression) | OK | The project settings page still renders correctly after the duplicated blocks left `admin.css`: tabs present, `button.primary` rgb(0,120,212) with 6px/12px padding, `.form-label` 110px, `.hint` 12px, table header bold on the neutral background, builder and section boxes unchanged |
+| Process | NOTE | The publish run failed while **polling validation** on a transient Marketplace error ("Our services aren't available right now") although the upload had succeeded, so 0.2.3 was left without its tag and commit status; both were created by hand, and a re-run then failed with "Version number must increase", which confirms the upload had landed. See Q19 |
+
+> The functional round trip (TC-85/87/88/89/90) was not repeated: 0.2.3 differs from 0.2.2 only in the
+> stylesheets and the documentation, and the dialog was opened and closed as part of this retest.
+
 ### 0.2.2 (dev edition) - private links and the proposal round trip
 
 Run on 2026-10-15 against the deployed `static-dev` 0.2.2 in the test organization (one project, one
