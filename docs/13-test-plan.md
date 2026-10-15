@@ -609,10 +609,12 @@ and editing the link clears the message. A proposal whose slug was taken meanwhi
 offers only **Reject**.
 
 ### TC-90  -  Private links stay out of backups  (D28)
-Create private links, propose one, then download an organization backup and inspect
+Create private links, propose one (and promote one), then download an organization backup and inspect
 `static-backup.json`.
-**Expected:** the export contains the project collections only - no `private-links` and no
-`link-proposals`. Restoring that backup leaves every user's private links untouched.
+**Expected:** the export contains the **project** collections only: `links` (including a promoted
+link) and `link-proposals` (proposals are project data). There is **no** `private-links` document, and
+a private link that was never promoted appears nowhere in the archive. Restoring that backup leaves
+every user's private links untouched.
 
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
@@ -631,6 +633,27 @@ because it writes a build attachment, not extension data. (MAN: needs an org whe
 is installed - verified with build 4595 in such an organization.)
 
 ## Results log
+
+### 0.2.2 (dev edition) - private links and the proposal round trip
+
+Run on 2026-10-15 against the deployed `static-dev` 0.2.2 in the test organization (one project, one
+identity - see Q18), driving the extension iframe in the debug browser.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-85 | OK | The editor opened with the shared form (Title, Slug, Comment, URL, Area). Title `Team runbook`, slug `team-runbook` and a repository URL saved with **Area = Repo** detected by the paste parser; the row survived a reload; edit locked the slug (`disabled`) and the rename persisted |
+| TC-85 (validation) | OK | A private slug that a project link owns was refused with "A link with that slug already exists." (red hint, primary disabled) |
+| TC-85 (deep link) | OK | `?page=scratch-link` resolved the **private** link and navigated the host to `.../_build` |
+| TC-85 (delete) | OK | Confirmation "Delete \"Scratch link\"? It is a private link, so this removes it for you only."; the table returned to "No private links yet." |
+| TC-87 | OK | Share asked for confirmation naming what is submitted (title, slug, URL, comment); the row switched to **Proposed - waiting for a decision.** with Share disabled (`"..." is already proposed`) and a notice reported the proposal |
+| TC-88 | OK | Project settings showed **Proposed links (1)** with the **snapshot** title (renaming the private link afterwards did not change it) and Proposed by; `Add to project` created an ordinary project link (`View/Edit/Delete`) and the section returned to 0; the hub then listed the project link and the private original was gone (promotion) |
+| TC-89 | OK | `Reject` asked "Do not add \"Scratch link\"? Its owner keeps the private link and sees that it was not added."; the hub showed **Not accepted. Edit it and share again.** with Share enabled again, and editing cleared the message (status back to Private) |
+| TC-90 | OK | The downloaded archive held only `link-proposals` and `links` (with the promoted link) - no `private-links` document, and the never-promoted private link appeared nowhere in it |
+| TC-83 / TC-84 (positive half) | OK | The hub hint named Project settings for a user who can open them, and the **Org.Settings** button was present for the collection administrator |
+| B8 | FAIL -> fixed | The share/reject/delete confirmation rendered **unstyled in the hub** (overlay `position: static`, panel without padding): its CSS lived only in `admin.css`. Moved to the shared `common/dialog.css`, linked by both pages; retested in 0.2.3 |
+
+Not covered here: **TC-86** (a second member cannot see or change these links) and the negative halves
+of **TC-83/TC-84** - all three need a second (non-administrator) identity in the project, see Q17/Q18.
 
 ### 0.2.0 (stable; first release of the code the dev editions carried) - process cases
 
@@ -817,6 +840,7 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.1.54 | OK | NOTE | Short **Area** labels (Repo/PR/Pipeline/Artifact/Fixed), Title/Area no-wrap on all tabs, auto-**Fixed** for unmodelled URLs, and a fix for the false "missing placeholder" error on concrete-build log links; tests 47/47 |
 | 0.1.55 | OK | NOTE | Builder notes are neutral (red reserved for validation errors) |
 | 0.1.56 | OK | NOTE | Pages/Links settings gain a **View** action (opens in a new tab); Trash tables show **Permanent delete by** (deletedUtc + 5 days); the Pages hub now also enforces the 5-day lazy purge; tests 48/48 |
+| 0.2.2 | OK | OK | **Private links** (user-scoped store) and **proposing** one to the project: two tables in the Links hub, Edit/Delete/Share on one row, the shared link editor, and Add to project / Reject with promotion; the confirmation dialog moved to a shared stylesheet (B8); tests 81/81 |
 | 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed
@@ -830,6 +854,7 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | B5 | 0.1.17 (found by user) | When Pages was disabled org-wide, the hub still showed the stale per-project wording ("Enable it under Project settings -> Pages") | `renderDisabled` text and no re-check of the org switch | Org-wide wording; throttled `checkEnablement()` reloads the hub when the switch changes |
 | B6 | 0.2.0 (found in a `share dev` run) | A `share dev` run on `main` was marked **failed** although the share itself succeeded | The workflow on `main` referenced `ci/shared-with.mjs` and `scripts/tfx.js show`, which existed only on `develop` (a workflow-only sync) | The report reads the list with `npx tfx-cli` directly, prints a graceful fallback and is `continue-on-error`, so a report can never fail a share (#29) |
 | B7 | 0.2.0 (found while testing B6) | The organization was printed in the run log: once through a step's `env:` block, four times through a job-level variable | The runner prints a step's `env:` block **before** the step runs, so `::add-mask::` cannot redact its own step (and inherited variables appear in every earlier step) | The value is read from the event payload file and handed on with `::add-mask::` and `eval` only - it never enters an `env:` block or the script text (#30, #31) |
+| B8 | 0.2.2 (found on 0.2.2, fixed for 0.2.3) | The Share/Reject/Delete confirmation in the **Links hub** rendered unstyled: the overlay was `position: static` (so the text flowed inline) and the panel had no padding or shadow | The dialog classes were styled only in `admin.css`; the hub links its own stylesheets, and the shared editor stylesheet did not cover the dialog | The dialog styles moved to `common/dialog.css`, which both entry points link (the editor styles had already moved to `common/link-editor.css` the same way) |
 
 ## Remaining manual checks (cross-origin iframe)
 
