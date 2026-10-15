@@ -1,0 +1,125 @@
+/*
+ * Shared link editor styles.
+ * Rationale: the editor (form + cascading builder) is used by both the project settings page and the
+ * Links hub. The settings page already styled these classes in admin.css; this file is what the hub
+ * links, so the two surfaces cannot drift apart.
+ */
+
+/* Add/edit form: one labelled field per line; full width so long values are visible. */
+.form {
+    margin-bottom: 8px;
+}
+
+.form-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.form-label {
+    width: 110px;
+    flex: 0 0 auto;
+    color: var(--text-secondary-color, #605e5c);
+}
+
+.form-row input {
+    flex: 1 1 auto;
+}
+
+.form-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* Form selects (e.g. a builder level) match the text inputs. */
+.form-row select {
+    flex: 1 1 auto;
+    padding: 6px 8px;
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 3px;
+    font: inherit;
+    background: var(--background-color, #ffffff);
+    color: var(--text-primary-color, #201f1e);
+}
+
+/* The per-level filter for long option lists sits after the select and stays compact. */
+.form-row .level-filter {
+    flex: 0 1 220px;
+    min-width: 120px;
+}
+
+input[type="text"] {
+    padding: 6px 8px;
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 3px;
+    font: inherit;
+}
+
+/* Disabled fields (e.g. the slug while editing) read as read-only, not editable. */
+input:disabled {
+    color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+}
+
+button {
+    padding: 6px 12px;
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 3px;
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    cursor: pointer;
+}
+
+button:hover {
+    background: rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* Primary action (Add / Save changes) uses the ADO communication colour. */
+button.primary {
+    background: var(--communication-background, #0078d4);
+    border-color: var(--communication-background, #0078d4);
+    color: var(--text-on-communication-background, #ffffff);
+}
+
+button.primary:hover:not(:disabled) {
+    filter: brightness(0.95);
+}
+
+/* Always-visible validation/guidance line. */
+.hint {
+    color: var(--text-secondary-color, #605e5c);
+    font-size: 12px;
+    margin: 8px 0 0;
+}
+
+.hint.error {
+    color: var(--status-error-text, #a4262c);
+}
+
+/* Cascading link builder (Area -> ... -> a valid URL). */
+.builder {
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin: 4px 0 8px;
+    background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+}
+
+/* Invalid field: red outline applied from JS only for values the user actually entered. */
+input.invalid {
+    border-color: var(--status-error-text, #a4262c);
+    box-shadow: 0 0 0 1px var(--status-error-text, #a4262c);
+}
+
+/* Visible focus ring for keyboard users. */
+input[type="text"]:focus,
+button:focus-visible {
+    outline: 2px solid var(--focus-border-color, #0078d4);
+    outline-offset: -1px;
+}

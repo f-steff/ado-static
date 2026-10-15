@@ -10,10 +10,26 @@ Three surfaces:
 
 ### Links hub (the `Links` entry)
 
-A curated list of bookmarkable links (Title, slug, Area, comment). Each row's href is the extension
-URL `?page={slug}` (copyable); a plain click navigates the host to the target in the same tab. A
-link is either **fixed** (a stored URL, possibly outside the project) or **dynamic** (re-resolved at
-open). The **Area** column shows a short category: Repo, PR, Pipeline, Artifact, Fixed.
+Two tables under one heading:
+
+| Table | Content |
+| --- | --- |
+| **Project links** | The curated list: Title, slug, Area, comment. Each row's href is the extension URL `?page={slug}` (copyable); a plain click navigates the host to the target in the same tab. A link is either **fixed** (a stored URL, possibly outside the project) or **dynamic** (re-resolved at open). The **Area** column shows a short category: Repo, PR, Pipeline, Artifact, Fixed. |
+| **Private links** | What the signed-in member created for themselves, with **Edit / Delete / Share** icons on one row and a **Status** column (Private, Proposed, or Not accepted). Readable by nobody else (user-scoped storage, [04](04-data-model.md)). |
+
+An **Add private link** button opens the same editor as the settings page (title, slug, URL, comment
+and the cascading builder), in-page, with Save/Cancel; the view is addressable (`#add`, `#edit=...`) so
+Back works.
+
+**Share** offers a private link to the project: a confirmation explains what is sent, then a frozen
+snapshot appears on the project settings page as a **proposed link**, where anyone who can open those
+settings may add it. Adding it promotes the link to the project (the project owns it; the member's
+private original is cleaned up on their next visit) and rejecting it returns the private link with a
+message. A private link resolves a `?page=<slug>` bookmark only when no project link owns that slug.
+
+The projects table's empty state follows the permission probe: a member who cannot open Project
+settings is told to ask a project administrator (or to add a private link) instead of being pointed at
+a page they cannot reach.
 
 ### Pages hub (the `Pages` entry)
 
@@ -61,7 +77,17 @@ An add/edit form (Title, Slug, URL, Comment) with a **cascading builder** for th
 Area (Repository, Pull request, Pipeline, Fixed) and keep choosing until an option is marked
 `[valid]`; a long option list gets a filter box. Pasting a full URL pre-selects the closest match;
 an out-of-project URL is stored as **Fixed**. The table lists Title, Slug, Area, URL and Comment,
-with View / Edit / Delete per row, and a links **Trash**.
+with View / Edit / Delete per row, and a links **Trash**. The same form (and its validation) is shared
+with the Links hub, where members use it for private links.
+
+#### Proposed links
+
+Under the links table, **Proposed links (N)** lists the private links members offered to this project:
+Title, Slug, Area, URL, Comment and **Proposed by**, with **Add to project** and **Reject** per row.
+Adding creates an ordinary project link from the frozen snapshot (attributed to the proposer via
+`proposedBy`) and behaves exactly like a link added here; rejecting returns the private link to its
+owner with a message. A proposal whose slug was taken since it was offered, or whose URL no longer has
+a valid shape, explains why and offers only **Reject**.
 
 ### Pages tab
 
@@ -150,7 +176,8 @@ stable data before a release) and doubles as a backup.
 | Capability | Required |
 | --- | --- |
 | View hubs / read a page | Normal project read access. |
-| Manage links/pages | Project administrator (the settings hub is only reachable via Project settings). |
+| Private links (add, edit, delete, share) | Normal project read access - the store is user-scoped, so only its owner can reach it. |
+| Manage links/pages, and add a proposed link | Project administrator (the settings hub is only reachable via Project settings). |
 | Use the organization settings (Overview, Backup) | Collection administrator (the organization settings hub is only reachable there). |
 
 Enforcement: the settings hub is only reached via Project settings; data writes use the caller's

@@ -10,9 +10,12 @@ import {
   addLink,
   addPage,
   clearPage,
+  currentProjectId,
+  currentProjectName,
   emptyIndex,
   emptyLinks,
   getHiddenRepos,
+  organizationName,
   purgeExpiredLinks,
   purgeExpiredTrash,
   purgeLink,
@@ -23,18 +26,26 @@ import {
   restorePage,
   setRepoHidden,
   updateLink,
-  updatePage
+  updatePage,
+  LinkProposal,
+  ProposalIndex,
+  acceptProposal,
+  currentUser,
+  decideProposal,
+  emptyProposals,
+  getProposals
 } from "../common/data-service";
 import { buildAbout } from "../common/about";
 import { getHeading } from "../common/branding";
-import { PipelineSummary, getBuildInfo, getBuildTimeline, getPipelineSummaries } from "../common/build-service";
-import { checkProjectUrl, describeProjectUrl } from "../common/ado-url";
-import { consumedParams, isFixedArea, targetMatches } from "../common/builder-core";
-import { DYNAMIC_TOKEN, DynamicSpec, LOG_JOB_TOKEN, LOG_STAGE_TOKEN, LOG_TASK_TOKEN, hasAnyToken, hasToken, normalizeTokens } from "../common/dynamic-links";
-import { BuilderOption, buildTargets, composePath, rootOptions } from "../common/link-builder";
-import { fixedUrlError, isHttpUrl, linkAreaLabel } from "../common/link-url";
+import { el, textField } from "../common/dom";
+import { PipelineSummary, getPipelineSummaries } from "../common/build-service";
+import { checkProjectUrl } from "../common/ado-url";
+import { DYNAMIC_TOKEN, DynamicSpec } from "../common/dynamic-links";
+import { isHttpUrl, linkAreaLabel } from "../common/link-url";
+import { acceptanceError } from "../common/private-links";
+import { LinkDraft, createLinkEditor } from "../common/link-editor";
 import { confirmDialog } from "../common/dialog";
-import { HUB_LINKS, HUB_PAGES, pagesOrgSettingsUrl, pagesProjectSettingsUrl, pagesHubUrl, extensionVersion } from "../common/extension-urls";
+import { HUB_LINKS, HUB_PAGES, extensionVersion, pagesOrgSettingsUrl, pagesProjectSettingsUrl, pagesHubUrl, projectBaseUrl } from "../common/extension-urls";
 import { withQueryParam } from "../common/urls";
 import { formatBytes, formatBytesWhole } from "../common/format";
 import { trashExpiryUtc } from "../common/index-logic";
@@ -61,6 +72,8 @@ import { slugError as validateSlug, slugify } from "../common/validation";
 // Cached state; the form fields are module state so typing does not force a re-render.
 let index: PageIndex = emptyIndex();
 let links: LinkIndex = emptyLinks();
+// Links members proposed from their private list, awaiting a decision (see buildProposalsSection).
+let proposals: ProposalIndex = emptyProposals();
 let errorText = "";
 // Active settings tab: links | pages | repos | trash.
 let activeTab = "links";
@@ -68,48 +81,31 @@ let editingPageId: string | null = null;
 let formName = "";
 let formSlug = "";
 let formComment = "";
-// Links form state.
+// Which project link the Links tab is editing (null = the form is in add mode). The form itself is
+// the shared editor in common/link-editor, which the Links hub also uses for private links.
 let editingLinkId: string | null = null;
-let formLinkTitle = "";
-let formLinkSlug = "";
-let formLinkUrl = "";
-let formLinkComment = "";
-// Dynamic-target state for a link (set by the cascading builder or a Repos-tab shortcut).
-let formLinkDynamicSpec: DynamicSpec | undefined = undefined;
-// Cascading builder state. Kept in module scope so the whole tree of selections (and every
-// branch you have visited) survives re-renders while the page stays open.
-let builderChosen: BuilderOption[] = [];
-let builderLevels: BuilderOption[][] = [rootOptions()];
-let builderSelected: string[] = [];
-let builderContainer: HTMLElement | null = null;
-// The URL input in the link form (updated by the builder).
-let linkUrlInput: HTMLInputElement | null = null;
-// Re-runs link-form validation (so builder/paste changes update the Add button).
-let linkFormRefresh: (() => void) | null = null;
-// Last builder error/message shown inside the builder box.
-let builderError = "";
-// Guards against overlapping paste runs (a paste fires both a paste and a change event): only the
-// newest run may mutate the builder state, so the levels cannot interleave into duplicates.
-let pasteGeneration = 0;
-// The last URL value that was parsed. Rationale: a paste triggers both paste and change; skipping
-// an identical value avoids a second, visually jumpy re-parse (levels expanding on blur).
-let lastParsedUrl = "";
-// Loaded options per parent path (avoids re-fetching when you go back).
-const builderCache = new Map<string, BuilderOption[]>();
-// Remembered child selection per parent path (restores a branch when you return to it).
-const builderMemory = new Map<string, string>();
-// Soft memory: the last chosen option key per level, independent of the parent path. Rationale:
-// when an earlier level changes (e.g. another build), the option keys of the later levels change
-// with it; matching by key re-selects the closest target by name (e.g. the same log target).
-const builderLevelMemory: string[] = [];
+
+/**
+ * The shared link editor, configured for project links.
+ * Rationale: a link's slug must be unique among the project's links (live and trashed), because a
+ * `?page=<slug>` bookmark resolves against those first.
+ */
+const linkEditor = createLinkEditor({
+  takenSlugs: () =>
+    [
+      ...(links.links || []).map((link) => link.slug),
+      ...(links.trash || []).map((entry) => entry.link.slug)
+    ],
+  hint: "Add link clears only the slug, so you can build several links from the same selections; use Clear to start over.",
+  addLabel: "Add link",
+  saveLabel: "Save changes",
+  onSave: (draft) => void onPrimaryLink(draft),
+  onCancel: () => resetLinkForm()
+});
 // Whether the current user may open the organization settings. `null` means "could not be
 // evaluated" - the button is then shown, because the host denies it anyway and hiding it from a
 // collection administrator would be the worse failure.
 let canOpenOrgSettings: PermissionState = null;
-// The last log target the admin chose. Log targets are stored by NAME (token placeholders), so
-// this exact option can be carried forward unchanged when the pipeline/build/mode changes; it is
-// resolved (or reported missing) against the build the link points at when the link is opened.
-let builderLastLogTarget: BuilderOption | null = null;
 
 // `applyTheme: true` applies the user's theme (light/dark) variables to this document.
 SDK.init({ applyTheme: true });
@@ -186,23 +182,9 @@ async function load(): Promise<void> {
   // Deleted pages/links are permanently removed once the retention window has passed.
   index = await purgeExpiredTrash(5);
   links = await purgeExpiredLinks(5);
+  proposals = await getProposals();
 }
 
-/** Tiny element factory to keep the DOM code readable. */
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string
-): HTMLElementTagNameMap[K] {
-  const element = document.createElement(tag);
-  if (className) {
-    element.className = className;
-  }
-  if (text != null) {
-    element.textContent = text;
-  }
-  return element;
-}
 
 /** Builds the whole admin UI. Called on load and after each mutation. */
 function render(): void {
@@ -254,7 +236,7 @@ function render(): void {
       // A same-document hash navigation: instant switch, real history entry (Back works).
       if (nav) {
         try {
-          nav.navigate(pagesProjectSettingsUrl(projectName()) + "#" + id);
+          nav.navigate(pagesProjectSettingsUrl(currentProjectName()) + "#" + id);
         } catch {
           // Fall through to an in-place switch.
         }
@@ -273,13 +255,17 @@ function render(): void {
   if (activeTab === "links") {
     content.appendChild(el("h2", undefined, editingLinkId ? "Edit link" : "Add link"));
     const linkFormSection = el("div", "section");
-    linkFormSection.appendChild(buildLinkForm());
+    linkFormSection.appendChild(linkEditor.buildForm());
     content.appendChild(linkFormSection);
 
     content.appendChild(el("h2", undefined, "Links"));
     const linkTableSection = el("div", "section");
     linkTableSection.appendChild(buildLinkTable());
     content.appendChild(linkTableSection);
+
+    const proposalSection = el("div", "section");
+    proposalSection.appendChild(buildProposalsSection());
+    content.appendChild(proposalSection);
   } else if (activeTab === "pages") {
     content.appendChild(el("h2", undefined, editingPageId ? "Edit page" : "Add page"));
     const formSection = el("div", "section");
@@ -480,7 +466,7 @@ async function loadAdminPipelines(body: HTMLElement): Promise<void> {
 /** Pre-fills the link form from a pipeline shortcut and switches to the Links tab. */
 function quickAddPipelineLink(pipeline: PipelineSummary, mode: string): void {
   const base =
-    `https://dev.azure.com/${organizationName()}/${encodeURIComponent(projectName())}` +
+    `https://dev.azure.com/${organizationName()}/${encodeURIComponent(currentProjectName())}` +
     `/_build/results?buildId=${DYNAMIC_TOKEN}`;
   let view = "&view=results";
   let buildMode: "latest" | "latest-succeeded" | "latest-failed" = "latest";
@@ -498,18 +484,15 @@ function quickAddPipelineLink(pipeline: PipelineSummary, mode: string): void {
     view = "&view=logs";
     suffix = "build logs";
   }
-  editingLinkId = null;
-  formLinkComment = "";
-  formLinkUrl = base + view;
-  formLinkDynamicSpec = { kind: "build", buildMode, definitionId: pipeline.id };
-  formLinkTitle = `${pipeline.name}: ${suffix}`;
-  formLinkSlug = slugify(`${pipeline.name}-${mode}`);
-  builderChosen = [];
-  builderSelected = [];
-  builderLevels = [rootOptions()];
-  builderCache.clear();
-  builderMemory.clear(); builderLevelMemory.length = 0; builderLastLogTarget = null;
-  builderError = "";
+  // A shortcut always starts from a clean editor (add mode, fresh builder), then pre-fills it.
+  linkEditor.reset();
+  linkEditor.patch({
+    title: `${pipeline.name}: ${suffix}`,
+    slug: slugify(`${pipeline.name}-${mode}`),
+    url: base + view,
+    comment: "",
+    dynamic: { kind: "build", buildMode, definitionId: pipeline.id }
+  });
   switchToLinksAndParse();
 }
 
@@ -623,83 +606,66 @@ function switchToLinksAndParse(): void {
   // shortcut, which should be reversible).
   if (nav) {
     try {
-      nav.navigate(pagesProjectSettingsUrl(projectName()) + "#links");
+      nav.navigate(pagesProjectSettingsUrl(currentProjectName()) + "#links");
     } catch {
       // Fall through to an in-place switch.
     }
   }
   render();
   // Parse the pre-filled URL so the builder levels reflect it (never truncated).
-  void applyPastedUrl();
+  linkEditor.parse();
 }
 
 /** Pre-fills the link form from a repository shortcut and switches to the Links tab. */
 function quickAddRepoLink(repo: RepositoryInfo, mode: string): void {
-  const base = linkBase() + "/_git/" + encodeURIComponent(repo.name);
-  editingLinkId = null;
-  formLinkComment = "";
-  formLinkDynamicSpec = undefined;
+  const base = projectBaseUrl() + "/_git/" + encodeURIComponent(repo.name);
+  // A shortcut always starts from a clean editor (add mode, fresh builder), then pre-fills it.
+  linkEditor.reset();
+  const prefill = (url: string, title: string, slug: string, dynamic?: DynamicSpec): void => {
+    linkEditor.patch({ url, title, slug, comment: "", dynamic });
+  };
   switch (mode) {
     case "pr-newest-open":
     case "pr-oldest-open":
-      formLinkUrl = base + "/pullrequest/" + DYNAMIC_TOKEN;
-      formLinkDynamicSpec = {
-        kind: "pr",
-        prScope: mode === "pr-oldest-open" ? "oldest-open" : "newest-open",
-        repositoryId: repo.id
-      };
-      formLinkTitle = `${repo.name}: ${mode === "pr-oldest-open" ? "oldest open PR" : "newest open PR"}`;
-      formLinkSlug = slugify(`${repo.name}-${mode === "pr-oldest-open" ? "oldest-pr" : "newest-pr"}`);
+      prefill(
+        base + "/pullrequest/" + DYNAMIC_TOKEN,
+        `${repo.name}: ${mode === "pr-oldest-open" ? "oldest open PR" : "newest open PR"}`,
+        slugify(`${repo.name}-${mode === "pr-oldest-open" ? "oldest-pr" : "newest-pr"}`),
+        {
+          kind: "pr",
+          prScope: mode === "pr-oldest-open" ? "oldest-open" : "newest-open",
+          repositoryId: repo.id
+        }
+      );
       break;
     case "commit-latest":
-      formLinkUrl = base + "/commit/" + DYNAMIC_TOKEN;
-      formLinkDynamicSpec = {
-        kind: "commit",
-        repositoryId: repo.id,
-        branch: repo.defaultBranch || "main"
-      };
-      formLinkTitle = `${repo.name}: latest commit`;
-      formLinkSlug = slugify(`${repo.name}-latest-commit`);
+      prefill(
+        base + "/commit/" + DYNAMIC_TOKEN,
+        `${repo.name}: latest commit`,
+        slugify(`${repo.name}-latest-commit`),
+        { kind: "commit", repositoryId: repo.id, branch: repo.defaultBranch || "main" }
+      );
       break;
     case "pr-list":
-      formLinkUrl = base + "/pullrequests?_a=active";
-      formLinkTitle = `${repo.name}: open pull requests`;
-      formLinkSlug = slugify(`${repo.name}-pull-requests`);
+      prefill(base + "/pullrequests?_a=active", `${repo.name}: open pull requests`, slugify(`${repo.name}-pull-requests`));
       break;
     case "pr-all":
-      formLinkUrl = base + "/pullrequests?_a=all";
-      formLinkTitle = `${repo.name}: all pull requests`;
-      formLinkSlug = slugify(`${repo.name}-all-pull-requests`);
+      prefill(base + "/pullrequests?_a=all", `${repo.name}: all pull requests`, slugify(`${repo.name}-all-pull-requests`));
       break;
     case "commits":
-      formLinkUrl = base + "/commits";
-      formLinkTitle = `${repo.name}: commits`;
-      formLinkSlug = slugify(`${repo.name}-commits`);
+      prefill(base + "/commits", `${repo.name}: commits`, slugify(`${repo.name}-commits`));
       break;
     case "branches":
-      formLinkUrl = base + "/branches";
-      formLinkTitle = `${repo.name}: branches`;
-      formLinkSlug = slugify(`${repo.name}-branches`);
+      prefill(base + "/branches", `${repo.name}: branches`, slugify(`${repo.name}-branches`));
       break;
     case "tags":
-      formLinkUrl = base + "/tags";
-      formLinkTitle = `${repo.name}: tags`;
-      formLinkSlug = slugify(`${repo.name}-tags`);
+      prefill(base + "/tags", `${repo.name}: tags`, slugify(`${repo.name}-tags`));
       break;
     default:
       // Repository root (a fixed link).
-      formLinkUrl = base;
-      formLinkTitle = repo.name;
-      formLinkSlug = slugify(repo.name);
+      prefill(base, repo.name, slugify(repo.name));
       break;
   }
-  // The shortcut bypasses the builder; start it fresh.
-  builderChosen = [];
-  builderSelected = [];
-  builderLevels = [rootOptions()];
-  builderCache.clear();
-  builderMemory.clear(); builderLevelMemory.length = 0; builderLastLogTarget = null;
-  builderError = "";
   switchToLinksAndParse();
 }
 
@@ -761,24 +727,6 @@ function buildForm(): HTMLElement {
   secondary.addEventListener("click", () => onSecondary());
 
   return form;
-}
-
-/** Creates a labelled text field; returns both the row (for layout) and the input. */
-function textField(
-  label: string,
-  value: string,
-  enabledField: boolean,
-  onChange: (value: string) => void
-): { row: HTMLElement; input: HTMLInputElement } {
-  const row = el("label", "form-row");
-  row.appendChild(el("span", "form-label", label));
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = value;
-  input.disabled = !enabledField;
-  input.addEventListener("input", () => onChange(input.value));
-  row.appendChild(input);
-  return { row, input };
 }
 
 /** Builds the page table with per-row actions. */
@@ -1039,117 +987,6 @@ async function onMove(pages: PageMetadata[], at: number, direction: number): Pro
 
 // ---- Links admin ----------------------------------------------------------------------------
 
-/** Organization name from the SDK (for URL validation). */
-function organizationName(): string {
-  const host = SDK.getHost();
-  return host ? host.name : "";
-}
-
-/** Current project name from the SDK (for URL validation). */
-function projectName(): string {
-  const web = SDK.getWebContext();
-  return web && web.project ? web.project.name : "";
-}
-
-/** Current project id (GUID) from the SDK; several ADO URLs use it instead of the name. */
-function projectId(): string {
-  const web = SDK.getWebContext();
-  return web && web.project ? web.project.id : "";
-}
-
-/** Builds the add/edit form for links (Title, Slug, URL, Comment). */
-function buildLinkForm(): HTMLElement {
-  const form = el("div", "form");
-  const titleField = textField("Title", formLinkTitle, true, (value) => {
-    formLinkTitle = value;
-  });
-  const slugField = textField("Slug", formLinkSlug, true, (value) => {
-    formLinkSlug = value;
-  });
-  const urlField = textField("URL (optional)", formLinkUrl, true, (value) => {
-    formLinkUrl = value;
-  });
-  const commentField = textField("Comment", formLinkComment, true, (value) => {
-    formLinkComment = value;
-  });
-  // Slug is immutable when editing so existing bookmarks never break.
-  slugField.input.disabled = editingLinkId != null;
-
-  form.appendChild(titleField.row);
-  form.appendChild(slugField.row);
-  form.appendChild(commentField.row);
-  form.appendChild(urlField.row);
-
-  // Cascading builder: Area -> ... until a valid URL exists (several levels may be valid).
-  const builder = el("div", "builder");
-  builder.appendChild(
-    el(
-      "p",
-      "hint",
-      "Build the link below. A link is valid as soon as an option is marked [valid]; several may be valid at once."
-    )
-  );
-  builderContainer = builder;
-  linkUrlInput = urlField.input;
-  form.appendChild(builder);
-  renderBuilder();
-
-  const hint = el("p", "hint");
-  form.appendChild(hint);
-
-  const buttons = el("div", "form-buttons");
-  const primary = el("button", "primary", editingLinkId ? "Save changes" : "Add link");
-  const secondary = el("button", undefined, editingLinkId ? "Cancel" : "Clear");
-  buttons.appendChild(primary);
-  buttons.appendChild(secondary);
-  form.appendChild(buttons);
-
-  // Live validation: title/slug, a valid URL, and a resolvable dynamic part.
-  const refresh = () => {
-    const slugProblem = linkSlugError();
-    const urlProblem = linkUrlError();
-    const dynamicProblem = linkDynamicError();
-    const error = slugProblem || urlProblem || dynamicProblem;
-    hint.textContent =
-      error ||
-      "Add link clears only the slug, so you can build several links from the same selections; use Clear to start over.";
-    hint.classList.toggle("error", Boolean(error));
-    slugField.input.classList.toggle("invalid", Boolean(slugProblem));
-    urlField.input.classList.toggle("invalid", Boolean(urlProblem));
-    primary.disabled =
-      formLinkTitle.trim().length === 0 || formLinkSlug.trim().length === 0 || Boolean(error);
-  };
-
-  titleField.input.addEventListener("input", refresh);
-  slugField.input.addEventListener("input", refresh);
-  urlField.input.addEventListener("input", () => {
-    // A manually typed URL overrides any builder result.
-    formLinkUrl = urlField.input.value;
-    // Keep the dynamic spec while any placeholder is present (dynamic OR log tokens).
-    if (!hasAnyToken(formLinkUrl)) {
-      formLinkDynamicSpec = undefined;
-    }
-    // A hand edit invalidates the last parse, so the next change re-parses.
-    lastParsedUrl = "";
-    refresh();
-  });
-  // Pasted URLs are parsed and pre-select matching builder options.
-  urlField.input.addEventListener("change", () => applyPastedUrl());
-  urlField.input.addEventListener("paste", () => window.setTimeout(() => applyPastedUrl(), 0));
-  commentField.input.addEventListener("input", refresh);
-  linkFormRefresh = refresh;
-  refresh();
-
-  primary.addEventListener("click", () => void onPrimaryLink());
-  secondary.addEventListener("click", () => resetLinkForm());
-  return form;
-}
-
-/** Base URL for a link (the org/project prefix is fixed and never shown to the admin). */
-function linkBase(): string {
-  return `https://dev.azure.com/${organizationName()}/${encodeURIComponent(projectName())}`;
-}
-
 /** The hub URL that opens a published page in the viewer (the View action opens it in a new tab). */
 function pageViewUrl(slug: string): string {
   return withQueryParam(pagesHubUrl(HUB_PAGES), "page", slug);
@@ -1165,617 +1002,26 @@ function openInNewTab(url: string): void {
   window.open(url, "_blank", "noopener");
 }
 
-/** Path key for the parent of a level (used for the builder cache/memory). */
-function builderParentKey(level: number): string {
-  return builderChosen
-    .slice(0, level)
-    .map((option) => option.key)
-    .join(">");
-}
-
-/** Path key including the option at a level (the parent key for the next level). */
-function builderPathKey(level: number): string {
-  return builderChosen
-    .slice(0, level + 1)
-    .map((option) => option.key)
-    .join(">");
-}
-
-/** Renders the builder's level selects (with a filter for long option lists). */
-function renderBuilder(): void {
-  if (!builderContainer) {
-    return;
-  }
-  builderContainer.innerHTML = "";
-  if (builderError) {
-    // Informational notes ("Detected a pipeline link", "stored as fixed") are not errors, so they
-    // use the neutral hint style; the form's own validation shows the red hint below the form.
-    builderContainer.appendChild(el("p", "hint builder-note", builderError));
-  }
-  for (let level = 0; level < builderLevels.length; level += 1) {
-    const options = builderLevels[level];
-    if (!options || options.length === 0) {
-      break;
-    }
-    const row = el("div", "form-row");
-    row.appendChild(el("span", "form-label", level === 0 ? "Area" : `Level ${level + 1}`));
-    const placeholder = level === 0 ? "(choose an area)" : "(choose)";
-    const select = document.createElement("select");
-    // Fills the select from the (optionally filtered) option list, keeping the current choice.
-    const fill = (needle: string) => {
-      const wanted = needle.trim().toLowerCase();
-      select.innerHTML = "";
-      const blank = document.createElement("option");
-      blank.value = "";
-      blank.textContent = placeholder;
-      select.appendChild(blank);
-      options
-        .filter((option) => !wanted || option.label.toLowerCase().indexOf(wanted) >= 0)
-        .forEach((option) => {
-          const choice = document.createElement("option");
-          choice.value = option.key;
-          choice.textContent = option.terminal ? `${option.label}  [valid]` : option.label;
-          select.appendChild(choice);
-        });
-      select.value = builderSelected[level] || "";
-    };
-    fill("");
-    select.addEventListener("change", () => void onBuilderChange(level, select.value));
-    row.appendChild(select);
-    // A filter keeps a long list (e.g. 200 log targets) usable.
-    if (options.length > 12) {
-      const filterInput = document.createElement("input");
-      filterInput.type = "text";
-      filterInput.className = "level-filter";
-      filterInput.placeholder = `Filter ${options.length} options...`;
-      filterInput.addEventListener("input", () => fill(filterInput.value));
-      row.appendChild(filterInput);
-    }
-    builderContainer.appendChild(row);
-    if (!builderSelected[level]) {
-      break;
-    }
-  }
-}
-
-/** Handles a builder selection: truncate deeper levels, load children, restore memory. */
-async function onBuilderChange(level: number, key: string): Promise<void> {
-  builderError = "";
-  if (!key) {
-    builderSelected = builderSelected.slice(0, level);
-    builderChosen = builderChosen.slice(0, level);
-    builderLevels = builderLevels.slice(0, level + 1);
-    builderLevelMemory.length = level;
-    applyBuilder();
-    return;
-  }
-  const option = (builderLevels[level] || []).find((candidate) => candidate.key === key);
-  if (!option) {
-    return;
-  }
-  const parent = builderParentKey(level);
-  builderSelected = builderSelected.slice(0, level);
-  builderChosen = builderChosen.slice(0, level);
-  builderLevels = builderLevels.slice(0, level + 1);
-
-  builderSelected[level] = key;
-  builderChosen[level] = option;
-  builderMemory.set(parent, key);
-  builderLevelMemory[level] = key;
-  // Track the last chosen log target (by name); a plain view choice clears it.
-  if (option.names) {
-    builderLastLogTarget = option;
-  } else if (option.key.indexOf("view:") === 0) {
-    builderLastLogTarget = null;
-  }
-
-  if (!option.loadChildren) {
-    applyBuilder();
-    return;
-  }
-  const childPath = builderPathKey(level);
-  let children = builderCache.get(childPath);
-  if (!children) {
-    try {
-      children = await option.loadChildren();
-      builderCache.set(childPath, children);
-    } catch (error) {
-      // A load failure (e.g. a missing permission) must not lose the form; show it in the box.
-      children = [];
-      builderError = error instanceof Error ? error.message : String(error);
-      builderLevels[level + 1] = children;
-      applyBuilder();
-      return;
-    }
-  }
-  // A dynamic build has no per-build log ids; its targets are name-based, so carry the last log
-  // target forward unchanged (it resolves against whatever build is current when opened).
-  const lastLog = builderLastLogTarget;
-  if (isDynamicBuildMode(option) && lastLog && !children.some((child) => child.key === lastLog.key)) {
-    children = [lastLog, ...children];
-  }
-  builderLevels[level + 1] = children;
-  applyBuilder();
-  // Restore a previously chosen child at this level, if any (so you can go back to a branch).
-  const remembered = builderMemory.get(childPath);
-  if (remembered && children.some((child) => child.key === remembered)) {
-    await onBuilderChange(level + 1, remembered);
-    return;
-  }
-  // No exact path memory: fall back to the soft per-level memory so changing an earlier level
-  // keeps the closest target by name (e.g. the same log target on another build).
-  const soft = builderLevelMemory[level + 1];
-  if (soft && children.some((child) => child.key === soft)) {
-    await onBuilderChange(level + 1, soft);
-    return;
-  }
-  // A dynamic build's log target is offered by name; re-select it so the location is kept.
-  if (isDynamicBuildMode(option) && lastLog) {
-    const placeholder = children.find((child) => child.key === lastLog.key);
-    if (placeholder) {
-      await onBuilderChange(level + 1, placeholder.key);
-      return;
-    }
-  }
-  renderBuilder();
-}
-
-/** True when an option is a dynamic (latest/...) build mode (its children are named targets). */
-function isDynamicBuildMode(option: BuilderOption): boolean {
-  return Boolean(option.dynamic && option.dynamic.kind === "build" && option.key !== "mode:fixed");
-}
-
-/** Applies the builder path to the URL field and the dynamic spec. */
-function applyBuilder(): void {
-  if (builderChosen.length > 0 && !isFixedArea(builderChosen)) {
-    const result = composePath(linkBase(), builderChosen);
-    formLinkUrl = normalizeTokens(result.url);
-    formLinkDynamicSpec = result.dynamic;
-    if (linkUrlInput) {
-      linkUrlInput.value = formLinkUrl;
-    }
-  } else if (isFixedArea(builderChosen)) {
-    // A fixed link's URL is typed by the admin; the builder contributes nothing.
-    formLinkDynamicSpec = undefined;
-    if (linkUrlInput) {
-      formLinkUrl = linkUrlInput.value;
-    }
-  }
-  renderBuilder();
-  if (linkFormRefresh) {
-    linkFormRefresh();
-  }
-}
-
-/**
- * Handles a pasted in-project URL: pre-selects the matching builder options and either keeps a
- * concrete target fixed or restores the dynamic spec when the URL already contains the token.
- */
-function applyPastedUrl(): void {
-  const url = formLinkUrl.trim();
-  if (!url) {
-    return;
-  }
-  // Skip re-parsing the same value: a paste fires both paste and change, and a second parse would
-  // visibly re-expand the builder levels.
-  if (url === lastParsedUrl) {
-    return;
-  }
-  lastParsedUrl = url;
-  // Claim the newest generation; an older, slower run will see itself as stale and stop.
-  const generation = ++pasteGeneration;
-  const info = describeProjectUrl(url, organizationName(), projectName(), projectId());
-  if (!info.ok) {
-    // Not a valid in-project URL: store it as a fixed link when it is an absolute http(s) URL.
-    if (isHttpUrl(url)) {
-      applyFixedArea("Not an in-project URL; stored as a fixed link.", generation);
-    }
-    return; // Otherwise linkUrlError shows the reason.
-  }
-  if (info.area === "repository" && info.repositoryName) {
-    formLinkDynamicSpec = undefined;
-    void autoSelectRepo(info.repositoryName, url, info, generation);
-  } else if (info.area === "build") {
-    formLinkDynamicSpec = undefined;
-    void autoSelectBuild(info, url, generation);
-  } else {
-    // An in-project URL we do not model (settings, dashboards, wiki, ...): store it as Fixed.
-    applyFixedArea("Stored as a fixed in-project link.", generation);
-  }
-}
-
-/** Resets the builder and selects the Fixed area, keeping the typed URL (unmodelled/out-of-project). */
-function applyFixedArea(message: string, generation: number): void {
-  formLinkDynamicSpec = undefined;
-  builderChosen = [];
-  builderSelected = [];
-  builderLevels = [rootOptions()];
-  builderCache.clear();
-  builderMemory.clear();
-  builderLevelMemory.length = 0;
-  builderLastLogTarget = null;
-  void onBuilderChange(0, "area:fixed").then(() => {
-    if (isStalePaste(generation)) {
-      return;
-    }
-    builderError = message;
-    renderBuilder();
-    if (linkFormRefresh) {
-      linkFormRefresh();
-    }
-  });
-}
-
-/** True when a paste run has been superseded by a newer one (its mutations must be dropped). */
-function isStalePaste(generation: number): boolean {
-  return generation !== pasteGeneration;
-}
-
-/** Pre-selects the pipeline -> build -> view -> stage/job/task chain from a pasted URL. */
-async function autoSelectBuild(
-  info: {
-    buildId?: string;
-    view?: string;
-    stageId?: string;
-    jobId?: string;
-    taskId?: string;
-    artifactPath?: string;
-    params: Array<[string, string]>;
-  },
-  pastedUrl: string,
-  generation: number
-): Promise<void> {
-  builderError = "";
-  const tokenized = hasToken(pastedUrl);
-  const fixedId = !tokenized && info.buildId ? info.buildId : undefined;
-  const buildInfo = fixedId ? await getBuildInfo(fixedId) : null;
-  if (isStalePaste(generation)) {
-    return;
-  }
-  const definitionId = buildInfo ? buildInfo.definitionId : 0;
-
-  builderChosen = [];
-  builderSelected = [];
-  builderLevels = [rootOptions()];
-  builderCache.clear();
-  builderMemory.clear(); builderLevelMemory.length = 0; builderLastLogTarget = null;
-
-  // Level 0: Area = Pipeline.
-  await onBuilderChange(0, "area:build");
-  if (isStalePaste(generation)) {
-    return;
-  }
-
-  // Level 1: the pipeline (by definition id).
-  if (definitionId) {
-    const pipe = (builderLevels[1] || []).find((candidate) => candidate.key === "pipe:" + definitionId);
-    if (pipe) {
-      await onBuilderChange(1, pipe.key);
-      if (isStalePaste(generation)) {
-        return;
-      }
-    }
-  }
-
-  // Level 2: build mode (Fixed when we have a concrete build id, else Latest).
-  const modeKey = fixedId ? "mode:fixed" : "mode:latest";
-  const mode = (builderLevels[2] || []).find((candidate) => candidate.key === modeKey);
-  if (mode) {
-    await onBuilderChange(2, mode.key);
-    if (isStalePaste(generation)) {
-      return;
-    }
-  }
-
-  // Level 3: build number (fixed only); an unknown id is added as "(invalid)".
-  if (fixedId) {
-    const level = builderChosen.length;
-    let buildOption = (builderLevels[level] || []).find((candidate) => candidate.key === "build:" + fixedId);
-    if (!buildOption) {
-      buildOption = {
-        key: "build:" + fixedId,
-        label: `Build ${fixedId} (invalid)`,
-        url: "/_build/results?buildId=" + fixedId,
-        terminal: true,
-        loadChildren: async () => buildTargets(Number(fixedId))
-      };
-      builderLevels[level] = [buildOption, ...(builderLevels[level] || [])];
-      builderCache.set(builderPathKey(level - 1), builderLevels[level]);
-    }
-    await onBuilderChange(level, buildOption.key);
-    if (isStalePaste(generation)) {
-      return;
-    }
-  }
-
-  // Target level: match by NAME. Log targets are stored by name, so the pasted ids are resolved to
-  // names against the pasted build and matched; anything the target does not consume stays as a
-  // fixed level, so the stored URL never truncates the pasted URL.
-  const consumed = new Set<string>();
-  if (info.view) {
-    const level = builderChosen.length;
-    const names = await resolvePastedNames(fixedId, info);
-    if (isStalePaste(generation)) {
-      return;
-    }
-    let match = (builderLevels[level] || []).find((candidate) =>
-      targetMatches(candidate, info.view || "", names)
-    );
-    if (!match && info.view === "logs" && (names.stage || names.job || names.task)) {
-      // No listed target matched (e.g. duplicate names): synthesize a token-based log target so the
-      // location still survives later changes.
-      match = syntheticLogTarget(names);
-      builderLevels[level] = [match, ...(builderLevels[level] || [])];
-    }
-    if (match) {
-      await onBuilderChange(level, match.key);
-      if (isStalePaste(generation)) {
-        return;
-      }
-      consumedParams(match.url).forEach((name) => consumed.add(name));
-    } else {
-      // An unknown/custom view: keep it (and its parameters) as fixed levels.
-      appendParamLevel("view", info.view);
-      consumed.add("view");
-    }
-  }
-
-  // Every parameter the target did not consume becomes a fixed level (never truncate).
-  for (const [key, value] of info.params || []) {
-    if (key === "buildId" || consumed.has(key)) {
-      continue;
-    }
-    appendParamLevel(key, value);
-  }
-
-  applyBuilder();
-  builderError = "Detected a pipeline link; adjust any level below.";
-  renderBuilder();
-  if (linkFormRefresh) {
-    linkFormRefresh();
-  }
-}
-
-/** Appends a synthetic fixed level for a query parameter (never truncates the URL). */
-function appendParamLevel(key: string, value: string, names?: Map<string, string>): void {
-  const option = paramOption(key, value, names || new Map<string, string>());
-  const level = builderChosen.length;
-  builderChosen[level] = option;
-  builderSelected[level] = option.key;
-  builderLevels[level] = [option];
-}
-
-/** Resolves the pasted s/j/t ids to their names using the pasted build's timeline. */
-async function resolvePastedNames(
-  buildId: string | undefined,
-  info: { stageId?: string; jobId?: string; taskId?: string }
-): Promise<{ stage?: string; job?: string; task?: string }> {
-  const names: { stage?: string; job?: string; task?: string } = {};
-  if (!buildId || (!info.stageId && !info.jobId && !info.taskId)) {
-    return names;
-  }
-  try {
-    const records = await getBuildTimeline(buildId);
-    const byId = new Map(records.map((record) => [record.id, record]));
-    const stage = info.stageId ? byId.get(info.stageId) : undefined;
-    const job = info.jobId ? byId.get(info.jobId) : undefined;
-    const task = info.taskId ? byId.get(info.taskId) : undefined;
-    names.stage = stage && stage.name;
-    names.job = job && job.name;
-    names.task = task && task.name;
-  } catch {
-    // Without the timeline we match a plain view and keep the raw ids as fixed params.
-  }
-  return names;
-}
-
-/** A token-based log target for a pasted logs URL that had no listed match. */
-function syntheticLogTarget(names: { stage?: string; job?: string; task?: string }): BuilderOption {
-  const label = [names.stage, names.job, names.task].filter(Boolean).join(" / ");
-  return {
-    key: "target:logs:" + label,
-    label: "Logs: " + label,
-    url:
-      "&view=logs" +
-      (names.stage ? "&s=" + LOG_STAGE_TOKEN : "") +
-      (names.job ? "&j=" + LOG_JOB_TOKEN : "") +
-      (names.task ? "&t=" + LOG_TASK_TOKEN : ""),
-    terminal: true,
-    names,
-    dynamic: { kind: "build", logTarget: { view: "logs", ...names } }
-  };
-}
-
-/** A builder option that reproduces one query parameter exactly. */
-function paramOption(key: string, value: string, names: Map<string, string>): BuilderOption {
-  return {
-    key: `param:${key}:${value}`,
-    label: paramLabel(key, value, names),
-    url: `&${key}=${encodeURIComponent(value)}`,
-    terminal: true
-  };
-}
-
-/** A human label for a query parameter (names a stage/job/task when known). */
-function paramLabel(key: string, value: string, names: Map<string, string>): string {
-  switch (key) {
-    case "view":
-      return "View: " + viewLabel(value);
-    case "s":
-      return "Stage: " + (names.get(value) || `fixed (${value})`);
-    case "j":
-      return "Job: " + (names.get(value) || `fixed (${value})`);
-    case "t":
-      return "Task: " + (names.get(value) || `fixed (${value})`);
-    case "path":
-      return "Path: " + value;
-    case "type":
-      return "Artifacts type: " + value;
-    default:
-      return `${key}: ${value}`;
-  }
-}
-
-/** A friendly name for a build view. */
-function viewLabel(view: string): string {
-  switch (view) {
-    case "results":
-      return "Results (summary)";
-    case "codecoverage-tab":
-      return "Code coverage";
-    case "artifacts":
-      return "Artifacts";
-    case "logs":
-      return "Logs";
-    default:
-      return view || "(default)";
-  }
-}
-
 /** Maps a build "view" query value to a builder view option key. */
 
-/** Pre-selects Area = Repository and the repository; restores the dynamic leaf for a token URL. */
-async function autoSelectRepo(
-  name: string,
-  pastedUrl: string,
-  info: { commit?: string; prId?: string },
-  generation: number
-): Promise<void> {
-  builderError = "";
-  await onBuilderChange(0, "area:repo");
-  if (isStalePaste(generation)) {
-    return;
-  }
-  const repos = builderCache.get("area:repo") || [];
-  const repo = repos.find((candidate) => candidate.label.toLowerCase() === name.toLowerCase());
-  if (!repo) {
-    formLinkUrl = pastedUrl;
-    if (linkUrlInput) {
-      linkUrlInput.value = formLinkUrl;
-    }
-    builderError = `Repository '${name}' was not found in this project.`;
-    renderBuilder();
-    if (linkFormRefresh) {
-      linkFormRefresh();
-    }
-    return;
-  }
-  await onBuilderChange(1, repo.key);
-  if (isStalePaste(generation)) {
-    return;
-  }
-
-  if (hasToken(pastedUrl)) {
-    // Restore the dynamic leaf: a commit token -> latest commit; a PR token -> newest open PR.
-    const children = builderLevels[2] || [];
-    const leafKey = info.commit ? "commit:default" : "pr:newest-open";
-    const leaf = children.find((candidate) => candidate.key === leafKey);
-    if (leaf) {
-      await onBuilderChange(2, leaf.key);
-    }
-    builderError = "Detected a repository link; restored the dynamic target.";
-  } else {
-    // A concrete target: keep the pasted URL exactly (fixed).
-    formLinkUrl = pastedUrl;
-    formLinkDynamicSpec = undefined;
-    if (linkUrlInput) {
-      linkUrlInput.value = formLinkUrl;
-    }
-    builderError = "";
-  }
-  if (isStalePaste(generation)) {
-    return;
-  }
-  renderBuilder();
-  if (linkFormRefresh) {
-    linkFormRefresh();
-  }
-}
-
-/** URL validation: required, and either a tokenized builder URL or a valid in-project URL. */
-function linkUrlError(): string {
-  const url = formLinkUrl.trim();
-  // A fixed link is any absolute http(s) URL (it need not be in-project).
-  if (isFixedArea(builderChosen)) {
-    return fixedUrlError(url);
-  }
-  if (!url) {
-    return "Choose options (or paste a URL) to build a link.";
-  }
-  if (hasToken(url)) {
-    const base = linkBase();
-    return url.startsWith(base + "/") ? "" : `The link must be inside this project (${base}).`;
-  }
-  const check = checkProjectUrl(url, organizationName(), projectName(), projectId());
-  return check.ok ? "" : check.error || "Invalid URL.";
-}
-
-/** Dynamic validation: the chosen path must be valid and the token present. */
-function linkDynamicError(): string {
-  if (builderChosen.length > 0) {
-    const result = composePath(linkBase(), builderChosen);
-    if (!result.terminal) {
-      return "Pick a valid link target (an option marked [valid]).";
-    }
-  }
-  if (formLinkDynamicSpec && !hasAnyToken(formLinkUrl)) {
-    return "The link is missing its placeholder ({{dyn}} or a log target).";
-  }
-  return "";
-}
-
-/** Slug validation for a link (unique across live and trashed links, reserved slugs blocked). */
-function linkSlugError(): string {
-  const existing = [
-    ...(links.links || []).map((link) => link.slug),
-    ...(links.trash || []).map((entry) => entry.link.slug)
-  ];
-  return validateSlug(formLinkSlug, existing, editingLinkId != null);
-}
-
-/** True when the link form may be submitted. */
-function linkFormValid(): boolean {
-  return (
-    formLinkTitle.trim().length > 0 &&
-    formLinkSlug.trim().length > 0 &&
-    !linkSlugError() &&
-    !linkUrlError() &&
-    !linkDynamicError()
-  );
-}
-
-/** Primary link action: create a link, or save edits (including the dynamic spec). */
-async function onPrimaryLink(): Promise<void> {
-  if (!linkFormValid()) {
-    return;
-  }
-  const url = formLinkUrl.trim();
-  const spec = formLinkDynamicSpec;
-  // Remember a fixed (possibly out-of-project) link so the hub/settings can label it.
-  const area = isFixedArea(builderChosen) ? "fixed" : undefined;
+/** Primary link action: create a link, or save edits (including the dynamic target). */
+async function onPrimaryLink(draft: LinkDraft): Promise<void> {
   try {
     if (editingLinkId) {
       links = await updateLink(editingLinkId, {
-        title: formLinkTitle.trim(),
-        url,
-        comment: formLinkComment.trim(),
-        dynamic: spec,
-        area
+        title: draft.title,
+        url: draft.url,
+        comment: draft.comment,
+        dynamic: draft.dynamic,
+        area: draft.area
       });
       resetLinkForm();
     } else {
-      links = await addLink(
-        formLinkTitle.trim(),
-        formLinkSlug.trim(),
-        url,
-        formLinkComment.trim(),
-        spec,
-        area
-      );
+      links = await addLink(draft.title, draft.slug, draft.url, draft.comment, draft.dynamic, draft.area);
       // Keep the selections so several links can be built from the same path; only the slug is
       // cleared, and the user must press Clear to start over.
       editingLinkId = null;
-      formLinkSlug = "";
+      linkEditor.patch({ slug: "" });
       errorText = "";
       render();
     }
@@ -1787,17 +1033,7 @@ async function onPrimaryLink(): Promise<void> {
 /** Resets the link form to "add" mode (everything, including the builder). */
 function resetLinkForm(): void {
   editingLinkId = null;
-  formLinkTitle = "";
-  formLinkSlug = "";
-  formLinkUrl = "";
-  formLinkComment = "";
-  formLinkDynamicSpec = undefined;
-  builderChosen = [];
-  builderSelected = [];
-  builderLevels = [rootOptions()];
-  builderCache.clear();
-  builderMemory.clear(); builderLevelMemory.length = 0; builderLastLogTarget = null;
-  lastParsedUrl = "";
+  linkEditor.reset();
   errorText = "";
   render();
 }
@@ -1805,28 +1041,24 @@ function resetLinkForm(): void {
 /** Switches the link form into edit mode (slug locked). */
 function onEditLink(link: LinkEntry): void {
   editingLinkId = link.linkId;
-  formLinkTitle = link.title;
-  formLinkSlug = link.slug;
-  formLinkUrl = link.url;
-  formLinkComment = link.comment || "";
-  formLinkDynamicSpec = link.dynamic;
-  // The stored path cannot be reconstructed exactly; start the builder fresh (the URL is shown).
-  builderChosen = [];
-  builderSelected = [];
-  builderLevels = [rootOptions()];
-  builderCache.clear();
-  builderMemory.clear(); builderLevelMemory.length = 0; builderLastLogTarget = null;
-  // The stored URL is already shown; mark it parsed so a blur does not re-parse it.
-  lastParsedUrl = link.url.trim();
+  // Preselect the Fixed area for a stored fixed (or out-of-project) link so the form validates.
+  const outOfProject =
+    isHttpUrl(link.url) &&
+    !checkProjectUrl(link.url, organizationName(), currentProjectName(), currentProjectId()).ok;
+  const area = link.area === "fixed" || outOfProject ? "fixed" : link.area;
+  linkEditor.setDraft(
+    {
+      title: link.title,
+      slug: link.slug,
+      url: link.url,
+      comment: link.comment || "",
+      dynamic: link.dynamic,
+      area
+    },
+    true
+  );
   errorText = "";
   render();
-  // Preselect the fixed area for a stored fixed (or out-of-project) link so the form validates.
-  if (
-    link.area === "fixed" ||
-    (isHttpUrl(link.url) && !checkProjectUrl(link.url, organizationName(), projectName(), projectId()).ok)
-  ) {
-    void onBuilderChange(0, "area:fixed");
-  }
 }
 
 /** Moves a link to the trash. */
@@ -1918,6 +1150,142 @@ function buildLinkTable(): HTMLElement {
   });
 
   return table;
+}
+
+/** The proposals awaiting a decision, oldest first (the order members offered them). */
+function openProposals(): LinkProposal[] {
+  return (proposals.proposals || [])
+    .filter((proposal) => proposal.state === "open")
+    .sort((a, b) => a.proposedUtc.localeCompare(b.proposedUtc));
+}
+
+/**
+ * Proposed links: private links members offered to this project.
+ * Rationale: a proposal is a **snapshot**, so the reviewers see exactly what was offered; accepting
+ * creates an ordinary project link (the project owns it from then on, and the proposer loses nothing
+ * private - their copy is cleaned up by their own client, which is the only writer allowed to).
+ */
+function buildProposalsSection(): HTMLElement {
+  const wrap = el("div");
+  const items = openProposals();
+  wrap.appendChild(el("h2", undefined, `Proposed links (${items.length})`));
+  wrap.appendChild(
+    el(
+      "p",
+      "hint",
+      "Private links offered by project members. Adding one makes it a normal project link; the member keeps nothing private."
+    )
+  );
+
+  const table = el("table", "data-table");
+  const head = el("thead");
+  const headRow = el("tr");
+  ["Title", "Slug", "Area", "URL", "Comment", "Proposed by"].forEach((label) =>
+    headRow.appendChild(el("th", undefined, label))
+  );
+  head.appendChild(headRow);
+  table.appendChild(head);
+
+  const body = el("tbody");
+  table.appendChild(body);
+
+  if (items.length === 0) {
+    const row = el("tr");
+    const cell = el("td", "empty", "No proposed links.");
+    cell.colSpan = 6;
+    row.appendChild(cell);
+    body.appendChild(row);
+    return wrap;
+  }
+
+  items.forEach((proposal) => {
+    const row = el("tr", "data-row");
+    row.appendChild(el("td", undefined, proposal.title));
+    row.appendChild(el("td", "mono", proposal.slug));
+    row.appendChild(el("td", "col-nowrap", linkAreaLabel(proposal.url, proposal.area)));
+    row.appendChild(el("td", "url", proposal.url));
+    row.appendChild(el("td", undefined, proposal.comment || ""));
+    row.appendChild(el("td", undefined, proposal.proposedByName || "(unknown)"));
+    body.appendChild(row);
+
+    const actionsRow = el("tr", "actions-row");
+    const actionsCell = el("td");
+    actionsCell.colSpan = 6;
+    const box = el("div", "row-actions");
+    // A proposal that cannot be added (its slug was taken, or the URL shape is wrong) explains why
+    // instead of offering a button that could only fail.
+    const problem = acceptanceError(
+      proposal,
+      links,
+      organizationName(),
+      currentProjectName(),
+      currentProjectId()
+    );
+    const add = rowButton("Add to project", () => void onAcceptProposal(proposal));
+    add.title = problem || "Add this link to the project";
+    add.disabled = Boolean(problem);
+    box.appendChild(add);
+    box.appendChild(rowButton("Reject", () => void onRejectProposal(proposal)));
+    if (problem) {
+      box.appendChild(el("span", "error", problem));
+    }
+    actionsCell.appendChild(box);
+    actionsRow.appendChild(actionsCell);
+    body.appendChild(actionsRow);
+  });
+
+  wrap.appendChild(table);
+  return wrap;
+}
+
+/** Accepts a proposal: it becomes a project link (the owner's client cleans up the private copy). */
+async function onAcceptProposal(proposal: LinkProposal): Promise<void> {
+  const problem = acceptanceError(
+    proposal,
+    links,
+    organizationName(),
+    currentProjectName(),
+    currentProjectId()
+  );
+  if (problem) {
+    fail(problem);
+    return;
+  }
+  if (
+    !(await confirmDialog(
+      `Add "${proposal.title}" to the project links? It is offered by ${proposal.proposedByName || "a member"}, ` +
+        "and becomes an ordinary project link that anyone with these settings can edit or delete."
+    ))
+  ) {
+    return;
+  }
+  try {
+    const result = await acceptProposal(proposal.proposalId, currentUser().name);
+    links = result.links;
+    proposals = result.proposals;
+    errorText = "";
+    render();
+  } catch (error) {
+    fail("Unable to add the proposed link.", error);
+  }
+}
+
+/** Rejects a proposal: the member keeps the private link and is told it was not added. */
+async function onRejectProposal(proposal: LinkProposal): Promise<void> {
+  if (
+    !(await confirmDialog(
+      `Do not add "${proposal.title}"? Its owner keeps the private link and sees that it was not added.`
+    ))
+  ) {
+    return;
+  }
+  try {
+    proposals = await decideProposal(proposal.proposalId, "rejected", currentUser().name);
+    errorText = "";
+    render();
+  } catch (error) {
+    fail("Unable to reject the proposed link.", error);
+  }
 }
 
 /** Builds the links trash table with restore and delete-instantly actions. */

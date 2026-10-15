@@ -48,7 +48,8 @@ import {
     withQueryParam
 } from "../src/common/urls";
 import { featureStateUrl, slugError, slugify } from "../src/common/validation";
-import type { PageIndex, PageMetadata, TrashEntry } from "../src/common/data-service";
+import { byOrderThenTitle, acceptanceError, proposalFor, promotionFields, reconcile, slugTaken } from "../src/common/private-links";
+import type { LinkEntry, LinkIndex, LinkProposal, PageIndex, PageMetadata, TrashEntry } from "../src/common/data-service";
 
 /** Builds a page with sensible defaults so tests can override only what they assert. */
 function makePage(overrides: Partial<PageMetadata> = {}): PageMetadata {
@@ -854,4 +855,157 @@ test("findActionBit locates a namespace action by name, case-insensitively", () 
     assert.equal(findActionBit({}, "x"), null);
     assert.equal(findActionBit({ actions: [{ name: "x" }] }, "x"), null);
     assert.equal(findActionBit({ actions: "nope" }, "x"), null);
+});
+
+// ---- Private links and proposals (PR: private links + proposals) ---------------------------
+
+/** Builds a link entry with defaults so tests only state what they assert. */
+function makeLink(overrides: Partial<LinkEntry> = {}): LinkEntry {
+    return {
+        linkId: "l1", slug: "a-link", title: "A link", url: "https://dev.azure.com/contoso/SampleProject",
+        comment: "", order: 0, enabled: true, hidden: false, updatedUtc: "", updatedBy: "",
+        ...overrides
+    };
+}
+
+const ORG = "contoso";
+const PROJECT = "SampleProject";
+const PROJECT_ID = "00001111-aaaa-2222-bbbb-3333cccc4444";
+const IN_PROJECT = `https://dev.azure.com/${ORG}/${PROJECT}/_git/repo`;
+const OUT_OF_PROJECT = "https://dev.azure.com/contoso/OtherProject/_git/repo";
+
+test("slugTaken reserves project links (live and trashed) as well as my own", () => {
+    const project = makeIndex([]) as unknown as LinkIndex;
+    const live = makeLink({ slug: "project-link" });
+    const trashed = makeLink({ linkId: "l2", slug: "trashed-link" });
+    const index: LinkIndex = {
+        id: "links", kind: "links", schemaVersion: 1, revision: 0,
+        links: [live], trash: [{ trashId: "t1", deletedUtc: "", deletedBy: "", link: trashed }]
+    };
+    const mine = [makeLink({ linkId: "p1", slug: "my-link" })];
+
+    assert.equal(slugTaken(index, mine, "project-link"), true);
+    // Case-insensitive, and trashed entries still reserve their slug.
+    assert.equal(slugTaken(index, mine, "PROJECT-Link"), true);
+    assert.equal(slugTaken(index, mine, "trashed-link"), true);
+    assert.equal(slugTaken(index, mine, "my-link"), true);
+    assert.equal(slugTaken(index, mine, "free"), false);
+    // An empty slug is the caller's business (the slug validator reports it).
+    assert.equal(slugTaken(index, mine, "   "), false);
+    // Editing a link keeps its own slug available.
+    assert.equal(slugTaken(index, mine, "my-link", "my-link"), false);
+    // A project link is missing while the private store still loads: only its own links count.
+    assert.equal(slugTaken(null, mine, "my-link"), true);
+    assert.equal(slugTaken(project, mine, "free"), false);
+});
+
+test("proposalFor freezes a snapshot and records the owner", () => {
+    const link = makeLink({
+        linkId: "p1", slug: "my-report", title: "My report", comment: "why",
+        url: "https://dev.azure.com/contoso/SampleProject/_build/results?buildId=42",
+        area: "build", dynamic: { kind: "build", buildMode: "fixed" }
+    });
+    const proposal = proposalFor(link, { id: "u1", name: "Sam" }, "prop1", new Date("2026-10-15T09:00:00Z"));
+
+    assert.equal(proposal.proposalId, "prop1");
+    assert.equal(proposal.privateLinkId, "p1");
+    assert.equal(proposal.state, "open");
+    assert.equal(proposal.slug, "my-report");
+    assert.equal(proposal.title, "My report");
+    assert.equal(proposal.comment, "why");
+    assert.equal(proposal.proposedById, "u1");
+    assert.equal(proposal.proposedByName, "Sam");
+    assert.equal(proposal.proposedUtc, "2026-10-15T09:00:00.000Z");
+    assert.deepEqual(proposal.dynamic, { kind: "build", buildMode: "fixed" });
+    assert.equal(proposal.area, "build");
+    // Optional fields are omitted rather than stored as undefined.
+    const plain = proposalFor(makeLink(), { id: "u1", name: "Sam" }, "prop2");
+    assert.equal("dynamic" in plain, false);
+    assert.equal("area" in plain, false);
+});
+
+test("promotionFields hands the link to the project and credits the proposer", () => {
+    const proposal = proposalFor(
+        makeLink({ slug: "my-report", title: "My report", area: "fixed", dynamic: { kind: "build", buildMode: "latest" } }),
+        { id: "u1", name: "Sam" },
+        "prop1"
+    );
+    const fields = promotionFields(proposal, "Ada", new Date("2026-10-15T10:00:00Z"));
+    assert.equal(fields.slug, "my-report");
+    assert.equal(fields.title, "My report");
+    assert.equal(fields.proposedBy, "Sam");
+    assert.equal(fields.enabled, true);
+    assert.equal(fields.hidden, false);
+    assert.equal(fields.updatedBy, "Ada");
+    assert.equal(fields.updatedUtc, "2026-10-15T10:00:00.000Z");
+    assert.deepEqual(fields.dynamic, { kind: "build", buildMode: "latest" });
+});
+
+test("acceptanceError re-checks the slug and the URL shape", () => {
+    const open = proposalFor(makeLink({ slug: "my-report", url: IN_PROJECT, area: undefined }), { id: "u1", name: "Sam" }, "prop1");
+    assert.equal(acceptanceError(open, null, ORG, PROJECT, PROJECT_ID), "");
+    // A project link took the slug in the meantime.
+    const taken: LinkIndex = {
+        id: "links", kind: "links", schemaVersion: 1, revision: 0,
+        links: [makeLink({ slug: "MY-REPORT" })], trash: []
+    };
+    assert.match(acceptanceError(open, taken, ORG, PROJECT, PROJECT_ID), /already used/);
+    // A fixed proposal may point anywhere http(s).
+    const fixed = { ...open, area: "fixed", url: "https://example.com/report" };
+    assert.equal(acceptanceError(fixed, null, ORG, PROJECT, PROJECT_ID), "");
+    assert.notEqual(acceptanceError({ ...fixed, url: "javascript:alert(1)" }, null, ORG, PROJECT, PROJECT_ID), "");
+    // An in-project proposal must still address this project.
+    assert.notEqual(acceptanceError({ ...open, url: OUT_OF_PROJECT }, null, ORG, PROJECT, PROJECT_ID), "");
+    assert.notEqual(acceptanceError({ ...open, url: "" }, null, ORG, PROJECT, PROJECT_ID), "");
+});
+
+test("reconcile keeps open proposals, promotes accepted ones and returns rejected ones", () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const openLink = makeLink({ linkId: "p-open", slug: "open", proposal: { proposalId: "prop-open", proposedUtc: "x" } });
+    const accepted = makeLink({ linkId: "p-acc", slug: "acc", proposal: { proposalId: "prop-acc", proposedUtc: "x" } });
+    const rejected = makeLink({ linkId: "p-rej", slug: "rej", proposal: { proposalId: "prop-rej", proposedUtc: "x" } });
+    const plain = makeLink({ linkId: "p-plain", slug: "plain" });
+    const stale = makeLink({ linkId: "p-stale", slug: "stale", proposal: { proposalId: "prop-gone", proposedUtc: "x" } });
+
+    const proposals: LinkProposal[] = [
+        { proposalId: "prop-open", privateLinkId: "p-open", slug: "open", title: "t", url: "", comment: "", proposedById: "u1", proposedByName: "Sam", proposedUtc: "x", state: "open" },
+        { proposalId: "prop-acc", privateLinkId: "p-acc", slug: "acc", title: "t", url: "", comment: "", proposedById: "u1", proposedByName: "Sam", proposedUtc: "x", state: "accepted", decidedUtc: "2026-10-15T11:00:00Z", decidedBy: "Ada" },
+        { proposalId: "prop-rej", privateLinkId: "p-rej", slug: "rej", title: "t", url: "", comment: "", proposedById: "u1", proposedByName: "Sam", proposedUtc: "x", state: "rejected", decidedUtc: "2026-10-15T11:30:00Z", decidedBy: "Ada" },
+        // Somebody else's proposal must not be touched or withdrawn.
+        { proposalId: "prop-other", privateLinkId: "p-other", slug: "other", title: "t", url: "", comment: "", proposedById: "u2", proposedByName: "Kim", proposedUtc: "x", state: "open" }
+    ];
+
+    const plan = reconcile([openLink, accepted, rejected, plain, stale], proposals, "u1", now);
+    const slugs = plan.links.map((link) => link.slug).sort();
+    assert.deepEqual(slugs, ["open", "plain", "rej", "stale"]);
+    // Promotion removes the private original; the decided records go with it (a record that does not
+    // exist is nothing to remove - that is the "already applied on another device" case).
+    assert.deepEqual(plan.removeLinkIds, ["p-acc"]);
+    assert.deepEqual(plan.removeProposalIds.sort(), ["prop-acc", "prop-rej"]);
+    assert.equal(plan.changed, true);
+    // Rejected keeps the link with a marker, and the marker is dropped once the record is decided.
+    const keptRejected = plan.links.find((link) => link.slug === "rej")!;
+    assert.equal(keptRejected.rejectedUtc, "2026-10-15T11:30:00Z");
+    assert.equal("proposal" in keptRejected, false);
+    // A missing record means the decision was already applied (another device): forget the marker.
+    const keptStale = plan.links.find((link) => link.slug === "stale")!;
+    assert.equal("proposal" in keptStale, false);
+    // An untouched link keeps its proposal reference.
+    const keptOpen = plan.links.find((link) => link.slug === "open")!;
+    assert.equal(keptOpen.proposal!.proposalId, "prop-open");
+    // A still-open proposal belongs to somebody else and survives even without a private link here.
+    assert.equal(plan.removeProposalIds.includes("prop-other"), false);
+});
+
+test("reconcile reports no change when nothing is proposed", () => {
+    const plan = reconcile([makeLink({ linkId: "p1" })], [], "u1");
+    assert.equal(plan.changed, false);
+    assert.deepEqual(plan.removeLinkIds, []);
+    assert.deepEqual(plan.removeProposalIds, []);
+    assert.equal(plan.links.length, 1);
+});
+
+test("byOrderThenTitle sorts private links by order, then title", () => {
+    const items = [makeLink({ slug: "c", title: "Charlie", order: 2 }), makeLink({ slug: "b", title: "Bravo", order: 0 }), makeLink({ slug: "a", title: "Alpha", order: 0 })];
+    assert.deepEqual(items.slice().sort(byOrderThenTitle).map((link) => link.slug), ["a", "b", "c"]);
 });
