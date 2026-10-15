@@ -114,6 +114,9 @@ jobs:
           TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
         run: |
           VALIDATION="$(node scripts/tfx.js validate dev 2>&1 || true)"
+          # Printed as well as collected: the run summary is not part of a run's log, so echoing it
+          # here is what makes the reported state checkable from outside.
+          echo "$VALIDATION"
           {
             echo ""
             echo "## Marketplace validation"
