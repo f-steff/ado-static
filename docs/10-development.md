@@ -86,6 +86,14 @@ ado-static/
 
 ## Branching and releases
 
+> **Sync `develop` before cutting a branch.** The merges happen on the remote (a pull request), so a
+> local `develop` goes stale silently: `git checkout develop && git fetch --prune origin &&
+> git pull --ff-only` first, then `git checkout -b <branch>`. A branch cut from a stale `develop`
+> re-applies already-merged commits, so its pull request is **conflicting** - and GitHub runs **no
+> workflows at all** for a conflicting pull request, which looks like a pull request whose checks never
+> arrive (three attempts were spent on this before the cause was found). When checks do not appear,
+> check the pull request's `mergeable` state first.
+
 - Only **`main`** and **`develop`** are long-lived; a branch exists for its pull request. GitHub
   deletes the head branch when the pull request merges (`delete_branch_on_merge` is on), so no merged
   branch accumulates.

@@ -647,6 +647,19 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.2.6 / 0.2.7 (dev edition) - one merged Links list with a Status column and a filter
+
+Run on 2026-10-16 against the deployed `static-dev` in the test project (which the pipelines now fill
+with three project links), one identity.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-91 (list) | OK | One table with the columns Title, Slug, Area, Comment, **Status**, **Actions**; the three project links appear alphabetically (`Build artifacts 2`, `Build log 2`, `Static documentation`); every row reads `project` and project rows carry **no** action buttons |
+| TC-91 (columns) | OK | Status and Actions are right-aligned and content-sized - `Status=55px`, `Actions=63px` against `Comment=293px` - so the data columns take the rest |
+| TC-91 (private + pending) | OK | Adding `Alpha report` puts it **first** (alphabetical across both kinds) with Status `private` and Edit/Delete/Share; after sharing, Status becomes `pending` and Share turns into `"Alpha report" is already proposed` (disabled) |
+| TC-91 (filter) | OK | `build` -> the two build links (title); `static-doc` -> one (slug); `URL file` -> one (comment); `zzz` -> "No links match \"zzz\"."; clearing restores every row. All case-insensitive |
+| B9 | FAIL -> fixed | 0.2.6 showed the six columns and the filter but **no rows at all**: `linksSection()` called `renderRows()` while the table was still detached, and `renderRows()` looks the tbody up by id, so it returned early. The first paint's loading row appeared (it is appended through a live reference) and typing in the filter made rows appear (attached by then) - both symptoms matched the cause. Fixed in 0.2.7 by rendering the rows after `root.appendChild(page)`, and re-verified above |
+
 ### 0.2.3 (dev edition) - the styling fix, retested
 
 Retest of B8 on the deployed 0.2.3, in the same project and identity as the 0.2.2 run.
@@ -867,6 +880,8 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.1.55 | OK | NOTE | Builder notes are neutral (red reserved for validation errors) |
 | 0.1.56 | OK | NOTE | Pages/Links settings gain a **View** action (opens in a new tab); Trash tables show **Permanent delete by** (deletedUtc + 5 days); the Pages hub now also enforces the 5-day lazy purge; tests 48/48 |
 | 0.2.2 | OK | OK | **Private links** (user-scoped store) and **proposing** one to the project: two tables in the Links hub, Edit/Delete/Share on one row, the shared link editor, and Add to project / Reject with promotion; the confirmation dialog moved to a shared stylesheet (B8); tests 81/81 |
+| 0.2.6 | OK | FAIL | **One merged Links list** (Status `project`/`private`/`pending`, Status+Actions right-aligned and content-sized, alphabetical, filter over title/slug/comment); the list rendered **empty** (B9) |
+| 0.2.7 | OK | OK | B9 fixed (rows rendered after the table is attached); the merged list, the statuses, the column sizing and all four filter behaviours verified; tests 83/83 |
 | 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed
