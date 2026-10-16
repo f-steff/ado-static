@@ -1,0 +1,43 @@
+name: Marketplace identity
+
+# TEMPORARY helper: prints the Visual Studio Marketplace identity id of the publishing service
+# principal. The publisher's Members page needs *that* id (its own VS profile id), not the Entra
+# application/client id, which is why the application cannot be found by name there.
+#
+# Delete this workflow once the identity is a member of the publisher - the publishing workflows do
+# not use it.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write # request the GitHub OIDC token that Entra exchanges for an access token
+  contents: read
+
+jobs:
+  identity:
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest migrates to Ubuntu 26 in October 2026
+    # Must match the federated credential's subject: repo:f-steff/ado-static:environment:marketplace
+    environment: marketplace
+    steps:
+      - name: Sign in as the publishing identity (OIDC, no secret)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      # 499b84ac-1321-427f-aa17-267ca6975798 is the well-known Azure DevOps / Visual Studio resource id.
+      - name: Ask the Visual Studio profile API who this identity is
+        run: |
+          az rest --url "https://app.vssps.visualstudio.com/_apis/profile/profiles/me" \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            -o json > profile.json
+          echo "### Marketplace identity" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat profile.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "The \`id\` field is what the publisher's Members page needs:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          node -e "const p=require('./profile.json');console.log('  marketplace identity id: ' + p.id);" >> "$GITHUB_STEP_SUMMARY"
+          cat profile.json
