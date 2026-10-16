@@ -184,7 +184,7 @@ migration material, downloaded backups) is gitignored outright - it must never b
 
 ## Versioning
 
-Versions are derived from git tags (see [README](../README.md)); the rules live in
+Versions are derived from git tags; the rules live in
 [`ci/version.mjs`](../ci/version.mjs) and are unit-tested in
 [`tests/version.test.mjs`](../tests/version.test.mjs):
 

@@ -149,11 +149,12 @@ page, which links back here. There is no enable/disable switch: Static is always
 
 ### Backup tab
 
-> The **release** (`static`) and **development** (`static-dev`) editions keep **separate** data, so
-> installing one in place of the other starts from an empty project. Switching editions therefore
-> means: **Download** a backup, install the other edition, then **Restore** it (here or from a
-> pipeline). Without that sequence the data looks lost - it is still in the other edition's scope
-> and only becomes visible again after switching back.
+> Only **one** edition can be installed in an organization at a time, and the **release** (`static`) and
+> **development** (`static-dev`) editions keep **separate** data - so installing one in place of the
+> other starts from an empty project. Switching editions therefore means: **Download** a backup,
+> uninstall the current edition, install the other one, then **Restore** it (here or from a pipeline).
+> Without that sequence the data looks lost - it is still in the other edition's scope and only becomes
+> visible again after switching back.
 
 **Download backup** reads every project's collection and saves a single ZIP
 (`static-backup-{organization}-{date}.zip`) holding `static-backup.json` (`format: "static-export"`,
