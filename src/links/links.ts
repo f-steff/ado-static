@@ -236,13 +236,14 @@ async function openLink(link: LinkEntry): Promise<string> {
   return "";
 }
 
-/** Shows the list view (and clears the editor address). */
+/** Shows the list view and puts the address back on the list. */
 function showList(): void {
   view = "list";
   editingPrivateId = null;
   notice = "";
   try {
-    nav.setHash("");
+    // A *named* hash rather than "": setting an empty hash leaves a bare trailing '#' in the host URL.
+    nav.setHash("list");
   } catch {
     // A hash we cannot set must not stop the form from closing.
   }
