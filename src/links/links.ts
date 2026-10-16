@@ -385,6 +385,13 @@ function renderList(message: string, loading = false): void {
   }
 
   root.appendChild(page);
+  // The rows are filled in *after* the page is in the document: renderRows() looks the table up by
+  // id, and an element that is not attached yet cannot be found. (0.2.6 rendered the table empty for
+  // exactly that reason - the first paint's loading row is appended through a live reference, which
+  // is why only the loaded rows were missing.)
+  if (view === "list" && !loading) {
+    renderRows();
+  }
   // Running version, centered at the bottom of the frame.
   page.appendChild(el("p", "version", `Static ${version()}`));
 }
@@ -432,9 +439,7 @@ function linksSection(loading: boolean): HTMLElement {
     cell.colSpan = 6;
     row.appendChild(cell);
     body.appendChild(row);
-    return section;
   }
-  renderRows();
   return section;
 }
 
