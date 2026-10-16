@@ -7,7 +7,12 @@ name: Marketplace identity
 # Delete this workflow once the identity is a member of the publisher - the publishing workflows do
 # not use it.
 
+# The trigger is a push to this file rather than workflow_dispatch: a dispatchable workflow must exist
+# on the *default* branch (main), which this repository only ever reaches through a release.
 on:
+  push:
+    paths:
+      - .github/workflows/marketplace-identity.yml
   workflow_dispatch:
 
 permissions:
