@@ -28,7 +28,7 @@ import { HUB_LINKS, pagesHubUrl } from "../common/extension-urls";
 import { getHostNavigation, HostNavigationService } from "../common/host-nav";
 import { PermissionState, canAccessProjectSettings } from "../common/permissions";
 import { LinkDraft, createLinkEditor } from "../common/link-editor";
-import { reconcile, proposalFor, slugTaken } from "../common/private-links";
+import { mergedRows, proposalFor, reconcile, slugTaken } from "../common/private-links";
 import { confirmDialog } from "../common/dialog";
 import { logError, logInfo } from "../common/log";
 import { encodeQuery, withQueryParam } from "../common/urls";
@@ -64,6 +64,8 @@ let canOpenProjectSettings: PermissionState = null;
 // "list" or "editor" (add/edit a private link); mirrored into the host hash so Back works.
 let view: "list" | "editor" = "list";
 let editingPrivateId: string | null = null;
+// The filter box's value (title, slug and comment are all searched).
+let filter = "";
 // A one-off message shown above the tables.
 let notice = "";
 
@@ -356,7 +358,7 @@ async function sharePrivateLink(link: LinkEntry): Promise<void> {
   }
 }
 
-/** The list of links; each title is a link that navigates to its target in the same tab. */
+/** The list of links (or the editor); the filter narrows the single merged table. */
 function renderList(message: string, loading = false): void {
   const root = document.getElementById("root");
   if (!root) {
@@ -378,8 +380,7 @@ function renderList(message: string, loading = false): void {
   if (view === "editor") {
     page.appendChild(editorSection());
   } else {
-    page.appendChild(projectSection(loading));
-    page.appendChild(privateSection(loading));
+    page.appendChild(linksSection(loading));
     page.appendChild(addButton());
   }
 
@@ -388,95 +389,78 @@ function renderList(message: string, loading = false): void {
   page.appendChild(el("p", "version", `Static ${version()}`));
 }
 
-/** The curated project links (managed in Project settings). */
-function projectSection(loading: boolean): HTMLElement {
+/**
+ * The merged list: the project's links and the user's private links in one table.
+ * Rationale: one list with a Status column replaces two tables that repeated every column, and the
+ * private links (the ones a member can act on) are no longer pushed below the fold.
+ */
+function linksSection(loading: boolean): HTMLElement {
   const section = el("div", "section");
-  section.appendChild(el("h2", undefined, "Project links"));
+
+  // Filter over title, slug and comment - the same interaction as the Repos hub.
+  const toolbar = el("div", "toolbar");
+  const filterInput = document.createElement("input");
+  filterInput.type = "text";
+  filterInput.placeholder = "Filter links...";
+  filterInput.value = filter;
+  // Re-render only the rows as the user types; keeps focus in the filter box.
+  filterInput.addEventListener("input", () => {
+    filter = filterInput.value;
+    renderRows();
+  });
+  toolbar.appendChild(filterInput);
+  section.appendChild(toolbar);
 
   const table = el("table", "data-table");
   const head = el("thead");
   const headRow = el("tr");
-  ["Title", "Slug", "Area", "Comment"].forEach((label) =>
-    headRow.appendChild(el("th", undefined, label))
-  );
+  ["Title", "Slug", "Area", "Comment", "Status", "Actions"].forEach((label, index) => {
+    const cell = el("th", index >= 4 ? "col-right" : undefined, label);
+    headRow.appendChild(cell);
+  });
   head.appendChild(headRow);
   table.appendChild(head);
   const body = el("tbody");
+  body.id = "links-body";
   table.appendChild(body);
   section.appendChild(table);
 
-  const links = (index.links || []).filter((link) => !link.hidden).slice().sort(byOrderThenTitle);
   if (loading) {
     // Shown only during the first paint, before data arrives (keeps the switch feeling instant).
     const row = el("tr");
     const cell = el("td", "empty", "Loading links...");
-    cell.colSpan = 4;
+    cell.colSpan = 6;
     row.appendChild(cell);
     body.appendChild(row);
-  } else if (links.length === 0) {
-    const row = el("tr");
-    const cell = el("td", "empty", emptyMessage());
-    cell.colSpan = 4;
-    row.appendChild(cell);
-    body.appendChild(row);
-  } else {
-    links.forEach((link) => {
-      const row = el("tr");
-      const titleCell = el("td");
-      titleCell.appendChild(linkAnchor(link));
-      row.appendChild(titleCell);
-      row.appendChild(el("td", "mono", link.slug));
-      row.appendChild(el("td", "col-nowrap", areaLabel(link)));
-      row.appendChild(el("td", undefined, link.comment || ""));
-      body.appendChild(row);
-    });
+    return section;
   }
+  renderRows();
   return section;
 }
 
-/** The signed-in user's private links, with Edit / Delete / Share on one row. */
-function privateSection(loading: boolean): HTMLElement {
-  const section = el("div", "section");
-  section.appendChild(el("h2", undefined, "Private links"));
-  section.appendChild(
-    el(
-      "p",
-      "subtitle",
-      "Only you can see these. Share one to offer it to the project; whoever manages the project settings decides."
-    )
-  );
+/** Renders the merged rows for the current filter (called on load and on every keystroke). */
+function renderRows(): void {
+  const body = document.getElementById("links-body");
+  if (!body) {
+    return;
+  }
+  body.innerHTML = "";
+  const rows = mergedRows(index, mine.links || [], filter);
 
-  const table = el("table", "data-table");
-  const head = el("thead");
-  const headRow = el("tr");
-  ["Title", "Slug", "Area", "Comment", "Status", "Actions"].forEach((label) =>
-    headRow.appendChild(el("th", undefined, label))
-  );
-  head.appendChild(headRow);
-  table.appendChild(head);
-  const body = el("tbody");
-  table.appendChild(body);
-  section.appendChild(table);
-
-  const links = (mine.links || []).slice().sort(byOrderThenTitle);
-  if (loading) {
+  if (rows.length === 0) {
     const row = el("tr");
-    const cell = el("td", "empty", "Loading your links...");
+    const trimmed = filter.trim();
+    const message = trimmed
+      ? `No links match "${trimmed}".`
+      : emptyMessage();
+    const cell = el("td", "empty", message);
     cell.colSpan = 6;
     row.appendChild(cell);
     body.appendChild(row);
-    return section;
-  }
-  if (links.length === 0) {
-    const row = el("tr");
-    const cell = el("td", "empty", "No private links yet.");
-    cell.colSpan = 6;
-    row.appendChild(cell);
-    body.appendChild(row);
-    return section;
+    return;
   }
 
-  links.forEach((link) => {
+  rows.forEach(({ link, status, mine: own }) => {
     const row = el("tr");
     const titleCell = el("td");
     titleCell.appendChild(linkAnchor(link));
@@ -484,17 +468,16 @@ function privateSection(loading: boolean): HTMLElement {
     row.appendChild(el("td", "mono", link.slug));
     row.appendChild(el("td", "col-nowrap", areaLabel(link)));
     row.appendChild(el("td", undefined, link.comment || ""));
-    row.appendChild(el("td", "status", privateStatus(link)));
-    row.appendChild(actionCell(link));
+    row.appendChild(el("td", "col-right status", status));
+    row.appendChild(own ? actionCell(link) : el("td", "col-right"));
     body.appendChild(row);
   });
-  return section;
 }
 
 /** Edit / Delete / Share, kept together in a single cell so they stay on one row. */
 function actionCell(link: LinkEntry): HTMLElement {
   // A flex wrapper inside the cell (rather than a flex cell) keeps the table's columns intact.
-  const cell = el("td");
+  const cell = el("td", "col-right");
   const box = el("div", "row-actions");
   const edit = iconButton({ icon: ICON_EDIT, label: `Edit "${link.title}"`, onClick: () => showEditor(link) });
   const remove = iconButton({
@@ -503,9 +486,15 @@ function actionCell(link: LinkEntry): HTMLElement {
     onClick: () => void deletePrivateLink(link)
   });
   const proposed = Boolean(link.proposal);
+  // A rejected link is simply private again, so the tooltip is what says it was not accepted.
+  const rejected = Boolean(link.rejectedUtc) && !proposed;
   const share = iconButton({
     icon: ICON_SHARE,
-    label: proposed ? `"${link.title}" is already proposed` : `Share "${link.title}" with the project`,
+    label: proposed
+      ? `"${link.title}" is already proposed`
+      : rejected
+        ? `Share "${link.title}" with the project again (the last proposal was not accepted)`
+        : `Share "${link.title}" with the project`,
     onClick: () => void sharePrivateLink(link),
     disabled: proposed
   });
@@ -514,17 +503,6 @@ function actionCell(link: LinkEntry): HTMLElement {
   box.appendChild(share);
   cell.appendChild(box);
   return cell;
-}
-
-/** What the Status column says about a private link. */
-function privateStatus(link: LinkEntry): string {
-  if (link.proposal) {
-    return "Proposed - waiting for a decision.";
-  }
-  if (link.rejectedUtc) {
-    return "Not accepted. Edit it and share again.";
-  }
-  return "Private";
 }
 
 /** The "Add private link" button (or a hint when the user may curate project links instead). */
@@ -589,11 +567,6 @@ function linkHref(slug: string): string {
   return withQueryParam(`${pagesHubUrl(HUB_ID)}${encodeQuery(currentQuery)}`, "page", slug);
 }
 
-/** Sort key: explicit order first, then title. */
-function byOrderThenTitle(a: LinkEntry, b: LinkEntry): number {
-  return (a.order || 0) - (b.order || 0) || a.title.localeCompare(b.title);
-}
-
 /** The running extension version (shown at the bottom). */
 function version(): string {
   const context = SDK.getExtensionContext();
@@ -606,15 +579,15 @@ function areaLabel(link: LinkEntry): string {
 }
 
 /**
- * Empty-state wording for the project links table.
+ * Empty-state wording for the merged list.
  * Rationale: "add them under Project settings" is wrong advice for a member who cannot open those
  * settings, so the message follows the permission probe (and stays neutral when it is unknown).
  */
 function emptyMessage(): string {
   if (canOpenProjectSettings === false) {
-    return "No project links yet. Ask a project administrator to add them under Project settings -> Static -> Links, or add a private link below.";
+    return "No links yet. Ask a project administrator to add project links under Project settings -> Static -> Links, or add a private link.";
   }
-  return "No project links yet. Add them under Project settings -> Static -> Links, or add a private link below.";
+  return "No links yet. Add a project link under Project settings -> Static -> Links, or add a private link.";
 }
 
 /** Renders a fatal error in place of the UI. */
