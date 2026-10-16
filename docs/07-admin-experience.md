@@ -10,12 +10,26 @@ Three surfaces:
 
 ### Links hub (the `Links` entry)
 
-Two tables under one heading:
+One table, ordered **alphabetically by title**, mixing two kinds of link:
 
-| Table | Content |
+| Column | Content |
 | --- | --- |
-| **Project links** | The curated list: Title, slug, Area, comment. Each row's href is the extension URL `?page={slug}` (copyable); a plain click navigates the host to the target in the same tab. A link is either **fixed** (a stored URL, possibly outside the project) or **dynamic** (re-resolved at open). The **Area** column shows a short category: Repo, PR, Pipeline, Artifact, Fixed. |
-| **Private links** | What the signed-in member created for themselves, with **Edit / Delete / Share** icons on one row and a **Status** column (Private, Proposed, or Not accepted). Readable by nobody else (user-scoped storage, [04](04-data-model.md)). |
+| Title | The link, addressed by the extension URL `?page={slug}` (copyable); a plain click navigates the host to the target in the same tab. A link is either **fixed** (a stored URL, possibly outside the project) or **dynamic** (re-resolved at open). |
+| Slug | The stable, bookmarkable URL segment. |
+| Area | Short category: Repo, PR, Pipeline, Artifact, Fixed. |
+| Comment | Free text. |
+| Status | `project` - curated in Project settings; `private` - only the signed-in user sees it; `pending` - offered to the project, awaiting a decision. |
+| Actions | Edit / Delete / Share on the user's own links only (a project link is managed in Project settings, so it has none), on one unwrapped row. |
+
+**Status and Actions sit at the right edge** and take only the width their content needs, so the four
+data columns absorb the rest of the row.
+
+A **filter** box (the same interaction as the Repos hub) narrows the list as you type, matching any
+substring of the **title, slug or comment**, case-insensitively. With no match the table says so,
+naming the filter.
+
+The empty state follows the permission probe: a member who cannot open Project settings is told to ask
+a project administrator, or to add a private link.
 
 An **Add private link** button opens the same editor as the settings page (title, slug, URL, comment
 and the cascading builder), in-page, with Save/Cancel; the view is addressable (`#add`, `#edit=...`) so
@@ -24,12 +38,9 @@ Back works.
 **Share** offers a private link to the project: a confirmation explains what is sent, then a frozen
 snapshot appears on the project settings page as a **proposed link**, where anyone who can open those
 settings may add it. Adding it promotes the link to the project (the project owns it; the member's
-private original is cleaned up on their next visit) and rejecting it returns the private link with a
-message. A private link resolves a `?page=<slug>` bookmark only when no project link owns that slug.
-
-The projects table's empty state follows the permission probe: a member who cannot open Project
-settings is told to ask a project administrator (or to add a private link) instead of being pointed at
-a page they cannot reach.
+private original is cleaned up on their next visit), and rejecting it returns the private link to
+`private`, whose Share button then says the last proposal was not accepted. A private link resolves a
+`?page=<slug>` bookmark only when no project link owns that slug.
 
 ### Pages hub (the `Pages` entry)
 

@@ -48,7 +48,7 @@ import {
     withQueryParam
 } from "../src/common/urls";
 import { featureStateUrl, slugError, slugify } from "../src/common/validation";
-import { byOrderThenTitle, acceptanceError, proposalFor, promotionFields, reconcile, slugTaken } from "../src/common/private-links";
+import { byOrderThenTitle, acceptanceError, mergedRows, proposalFor, promotionFields, reconcile, slugTaken } from "../src/common/private-links";
 import type { LinkEntry, LinkIndex, LinkProposal, PageIndex, PageMetadata, TrashEntry } from "../src/common/data-service";
 
 /** Builds a page with sensible defaults so tests can override only what they assert. */
@@ -1008,4 +1008,54 @@ test("reconcile reports no change when nothing is proposed", () => {
 test("byOrderThenTitle sorts private links by order, then title", () => {
     const items = [makeLink({ slug: "c", title: "Charlie", order: 2 }), makeLink({ slug: "b", title: "Bravo", order: 0 }), makeLink({ slug: "a", title: "Alpha", order: 0 })];
     assert.deepEqual(items.slice().sort(byOrderThenTitle).map((link) => link.slug), ["a", "b", "c"]);
+});
+
+// ---- Merged Links hub list (one table with a Status column) ---------------------------------
+
+test("mergedRows merges project and private links, hides hidden ones and sorts by title", () => {
+    const project: LinkIndex = {
+        id: "links", kind: "links", schemaVersion: 1, revision: 0,
+        links: [
+            makeLink({ linkId: "a", slug: "build-log", title: "Build log", comment: "latest run" }),
+            makeLink({ linkId: "b", slug: "hidden-one", title: "Hidden one", hidden: true }),
+            makeLink({ linkId: "c", slug: "docs", title: "Documentation" })
+        ],
+        trash: []
+    };
+    const mine = [
+        makeLink({ linkId: "p1", slug: "my-report", title: "My report", comment: "mine" }),
+        makeLink({ linkId: "p2", slug: "pending-one", title: "Pending one", proposal: { proposalId: "x", proposedUtc: "t" } })
+    ];
+    const rows = mergedRows(project, mine, "");
+
+    // Alphabetical by title, both groups mixed; a hidden project link is not listed.
+    assert.deepEqual(rows.map((row) => row.link.title), ["Build log", "Documentation", "My report", "Pending one"]);
+    assert.deepEqual(rows.map((row) => row.status), ["project", "project", "private", "pending"]);
+    // Only the user's own links carry actions.
+    assert.deepEqual(rows.map((row) => row.mine), [false, false, true, true]);
+});
+
+test("mergedRows filters on title, slug and comment, case-insensitively", () => {
+    const project: LinkIndex = {
+        id: "links", kind: "links", schemaVersion: 1, revision: 0,
+        links: [
+            makeLink({ linkId: "a", slug: "build-log", title: "Build log", comment: "latest run" }),
+            makeLink({ linkId: "c", slug: "docs", title: "Documentation" })
+        ],
+        trash: []
+    };
+    const mine = [makeLink({ linkId: "p1", slug: "my-report", title: "My report", comment: "nightly numbers" })];
+
+    assert.deepEqual(mergedRows(project, mine, "BUILD").map((row) => row.link.slug), ["build-log"]);
+    assert.deepEqual(mergedRows(project, mine, "docs").map((row) => row.link.slug), ["docs"]);
+    // A match in the comment counts too.
+    assert.deepEqual(mergedRows(project, mine, "nightly").map((row) => row.link.slug), ["my-report"]);
+    // No match, and the empty filter returns everything.
+    assert.deepEqual(mergedRows(project, mine, "zzz"), []);
+    assert.equal(mergedRows(project, mine, "   ").length, 3);
+    // A rejected private link is simply private again.
+    const rejected = [makeLink({ linkId: "p2", slug: "nope", title: "Nope", rejectedUtc: "t" })];
+    assert.deepEqual(mergedRows(null, rejected, "").map((row) => row.status), ["private"]);
+    // No data at all is not an error.
+    assert.deepEqual(mergedRows(null, [], ""), []);
 });

@@ -206,3 +206,59 @@ export function reconcile(
 export function byOrderThenTitle(a: LinkEntry, b: LinkEntry): number {
   return (a.order || 0) - (b.order || 0) || a.title.localeCompare(b.title);
 }
+
+/** How a row of the merged Links list is owned. */
+export type LinkStatus = "project" | "pending" | "private";
+
+/** One row of the merged Links list. */
+export interface LinkRow {
+  link: LinkEntry;
+  status: LinkStatus;
+  /** True when the row is one of the signed-in user's own links (only those have actions). */
+  mine: boolean;
+}
+
+/** True when a link matches the filter in its title, slug or comment (case-insensitive). */
+export function linkMatches(link: LinkEntry, filter: string): boolean {
+  const needle = (filter || "").trim().toLowerCase();
+  if (!needle) {
+    return true;
+  }
+  const haystack = [link.title, link.slug, link.comment]
+    .map((value) => (value || "").toLowerCase())
+    .join("\n");
+  return haystack.includes(needle);
+}
+
+/**
+ * The Links hub shows one list: the project's links and the signed-in user's private links, merged.
+ *
+ * Rationale: two tables duplicated every column and pushed the private links (the ones a member can
+ * act on) below the fold. One list with a **Status** column says the same thing in half the space,
+ * and the filter then searches both at once. A private link that is waiting for a decision reads
+ * "pending"; a rejected one is back to "private" (its Share button says it was not accepted).
+ * Hidden project links stay omitted, and the order is alphabetical by title in both groups.
+ */
+export function mergedRows(
+  project: LinkIndex | null,
+  mine: LinkEntry[],
+  filter = ""
+): LinkRow[] {
+  const rows: LinkRow[] = [];
+  for (const link of (project && project.links) || []) {
+    // Hidden project links are not part of the hub's list (they are still addressable by slug).
+    if (!link.hidden) {
+      rows.push({ link, status: "project", mine: false });
+    }
+  }
+  for (const link of mine || []) {
+    rows.push({ link, status: link.proposal ? "pending" : "private", mine: true });
+  }
+  return rows
+    .filter((row) => linkMatches(row.link, filter))
+    .sort(
+      (a, b) =>
+        a.link.title.localeCompare(b.link.title, undefined, { sensitivity: "base" }) ||
+        a.link.slug.localeCompare(b.link.slug)
+    );
+}

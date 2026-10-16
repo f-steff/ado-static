@@ -70,6 +70,7 @@ pure logic that previously had to be checked by hand:
 | AT-14 | Permission payloads | `{count,value}` and bare-array responses; action lookup by name; malformed input -> `null` (unknown) | TC-83, TC-84 |
 | AT-15 | Private links | slug reservation across project + own links; proposal snapshot; promotion fields; acceptance guard (taken slug, bad URL) | TC-85, TC-88 |
 | AT-16 | Proposal reconciliation | open keeps its marker, accepted removes the private original, rejected marks it, a missing record is forgotten, an orphaned proposal is withdrawn, other members' proposals are untouched | TC-87..TC-89 |
+| AT-17 | Merged Links list | project + private rows in one list, hidden project links omitted, `project`/`private`/`pending` statuses, alphabetical order, and matching on title/slug/comment (case-insensitive) | TC-91 |
 
 ## Test cases
 
@@ -574,10 +575,11 @@ unavailable probe leaves it visible so an administrator is never locked out).
 ### TC-85  -  Private links: create, edit, delete  (FR-LINK, D28)
 In the Links hub, press **Add private link** and build a link (title, slug, URL or the cascading
 builder), then save; edit it (the slug is locked) and save; delete it and confirm.
-**Expected:** the private table exists under the project links with a **Status** column, and the
-**Edit / Delete / Share** icons stay on one row. Save returns to the list with the row present and
-persisted across a reload; an edit keeps the slug; delete removes only that row. Adding a slug that a
-project link or another private link already uses is refused with a link-specific message.
+**Expected:** the row appears in the single merged list with **Status** `private`, alphabetically by
+title, and the **Edit / Delete / Share** icons stay on one row at the right edge. Save returns to the
+list with the row present and persisted across a reload; an edit keeps the slug; delete removes only
+that row. Adding a slug that a project link or another private link already uses is refused with a
+link-specific message.
 (Automated: `slugTaken`; the editor's validation is shared with the settings page - TC-04/TC-05.)
 
 ### TC-86  -  A private link is private  (D28)
@@ -590,9 +592,9 @@ and vice versa. (MAN while only one identity exists - Q18.)
 ### TC-87  -  Share offers a snapshot  (D28)
 Share a private link and confirm; then edit the private link's title/URL.
 **Expected:** the confirmation lists what is submitted (title, slug, URL, comment) and that the
-private copy stays until it is added. The row's Status becomes **Proposed - waiting for a decision**
-and its Share button is disabled. The project settings -> Links tab shows **Proposed links (1)** with
-the **original** title/URL (the later edit does not change the snapshot) and the proposer's name.
+private copy stays until it is added. The row's Status becomes `pending` and its Share button is
+disabled. The project settings -> Links tab shows **Proposed links (1)** with the **original**
+title/URL (the later edit does not change the snapshot) and the proposer's name.
 
 ### TC-88  -  Accepting promotes the link  (D28)
 On the settings page, press **Add to project** for a proposed link and confirm.
@@ -604,9 +606,20 @@ hub load the private row is gone (promotion) and the project table shows the lin
 ### TC-89  -  Rejecting returns the link  (D28)
 Propose a private link, then press **Reject** on the settings page and confirm.
 **Expected:** the proposal disappears from the settings section; the proposer's hub still shows the
-private link, now with **Not accepted. Edit it and share again.** The Share button is enabled again,
-and editing the link clears the message. A proposal whose slug was taken meanwhile shows why and
-offers only **Reject**.
+link with Status `private`, and its Share button is enabled again with the tooltip saying the last
+proposal was not accepted. A proposal whose slug was taken meanwhile shows why and offers only
+**Reject**.
+
+### TC-91  -  One merged Links list with a filter  (FR-LINK, D28)
+In a project that has both kinds of link, open the Links hub, then type in the filter box.
+**Expected:** a **single** table shows project links and the user's own private links together, ordered
+alphabetically by title, with the columns Title, Slug, Area, Comment, **Status** and **Actions**.
+Status reads `project`, `private` or `pending` (a proposed link), project rows have **no** actions, and
+Status/Actions sit at the right edge taking only the width their content needs. The filter narrows the
+list as you type, matching any substring of the **title, slug or comment** (case-insensitive); no match
+says so and names the filter; clearing it restores every row.
+(Automated: `mergedRows` - merge, hidden project links omitted, statuses, title order, and matching on
+title/slug/comment.)
 
 ### TC-90  -  Private links stay out of backups  (D28)
 Create private links, propose one (and promote one), then download an organization backup and inspect
