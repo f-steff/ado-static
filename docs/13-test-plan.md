@@ -647,6 +647,22 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.2.11 (dev edition) - the permission negatives, with a demoted identity
+
+Run on 2026-10-17 against the deployed `static-dev` 0.2.11, with the second identity (Q18) holding **no**
+administrator role: removed from the organization's Project Collection Administrators group and given
+plain membership of two projects (one empty, one for the settings check).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-83 (negative) | OK | In the empty project the member is a plain member: the project probe answers `permissions/52d39943-.../131072 -> {"value":[false]}` (`MANAGE_PROPERTIES`), and the hub says "No links yet. **Ask a project administrator** to add project links under Project settings -> Static -> Links, or add a private link." |
+| TC-83 (positive) | OK | The owner (a collection administrator) sees "No links yet. **Add a project link under** Project settings -> Static -> Links, or add a private link." |
+| TC-84 (negative) | OK | The member **can** open that project's settings page (a member, not an administrator) and the collection probe answers `permissions/3e65f728-.../2 -> {"value":[false]}` (`GENERIC_WRITE`), so the **Org.Settings button is absent** - the case this feature exists for |
+| TC-84 (positive) | OK | For the owner the collection probe answers `{"value":[true]}` and the button is present |
+| B10 (re-verified) | OK | Every probe result above comes from a real `permissions/...` call, so the 0.2.9 fix is confirmed with both identities |
+
+TC-83 and TC-84 are now complete in both directions; nothing is outstanding on the permission-aware UI.
+
 ### 0.2.8 / 0.2.9 (dev edition) - a second identity: isolation, and a probe bug
 
 Run on 2026-10-17 against the deployed `static-dev`, with **two** identities in separate browser
@@ -904,6 +920,8 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.2.7 | OK | OK | B9 fixed (rows rendered after the table is attached); the merged list, the statuses, the column sizing and all four filter behaviours verified; tests 83/83 |
 | 0.2.8 | OK | OK | The list's address is `#list` instead of a bare `#`; private-link isolation verified with a second identity (TC-86) |
 | 0.2.9 | OK | OK | **B10** fixed: the permission probes now evaluate (the namespace definition is unwrapped), so the permission-aware controls follow the answer instead of always falling back to visible; tests 84/84 |
+| 0.2.10 | OK | OK | Publishing authenticates with the **Microsoft Entra identity** through GitHub OIDC (the federated credential is fixed), with the PAT still as a fallback while the change was proven |
+| 0.2.11 | OK | OK | The PAT fallback removed (no repository secret left); a publish with no PAT available proves the identity alone works. Permission-aware UI complete: TC-83/TC-84 verified in both directions with a non-administrator second identity |
 | 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed
