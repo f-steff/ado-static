@@ -72,7 +72,7 @@ pure logic that previously had to be checked by hand:
 | AT-16 | Proposal reconciliation | open keeps its marker, accepted removes the private original, rejected marks it, a missing record is forgotten, an orphaned proposal is withdrawn, other members' proposals are untouched | TC-87..TC-89 |
 | AT-17 | Merged Links list | project + private rows in one list, hidden project links omitted, `project`/`private`/`pending` statuses, alphabetical order, and matching on title/slug/comment (case-insensitive) | TC-91 |
 | AT-18 | Pre-fill guard | `acceptablePrefillUrl` accepts absolute http(s) URLs within the length cap, and ignores `javascript:`/`data:`/`file:`/non-strings/over-long values | TC-92 |
-| AT-19 | Bookmarklet builder | `addLinkBookmarklet` targets the **Links hub** (the private-link form, never the settings page), embeds the given edition's ids, handles dev.azure.com and {org}.visualstudio.com pages, does not double-encode an already-encoded project segment, and leaves the page alone outside a project | TC-92 |
+| AT-19 | Bookmarklet builder | `addLinkBookmarklet` targets the **Links hub** (the private-link form, never the settings page), embeds the given edition's ids, prefers the project of the current page and otherwise uses the pinned project (so a fixed link works), only derives a project on Azure DevOps hosts, does not double-encode an already-encoded segment, and leaves unrelated pages alone | TC-92 |
 | AT-20 | Error reporting | `describeError` returns the Error message, a plain object's `message` with its name, the JSON body's message from `responseText`, the name plus HTTP status when there is no body, and a bounded fallback - never `[object Object]` | B11 |
 
 ## Test cases
@@ -640,10 +640,12 @@ the same). Then, on any Azure DevOps page (a build's log view is a good one), cl
 **Expected:** the **Links hub** opens with the **private-link** form shown, its URL field filled and the
 cascading builder matched (a build log URL yields the pipeline/build/view and the stage/job/task
 target); the primary button reads *Add private link*, and saving keeps the link in the user's own scope
-(Status `private`). Opening the **settings** page with `?url=<that page's URL>` instead fills the
-**project**-link form (FR-ADM-13). A value that is not an absolute `http(s)` URL (for example
-`javascript:alert(1)`) is ignored in both, and used outside a project the bookmarklet leaves the page
-alone.
+(Status `private`). The project is resolved as follows: a page inside a project lands in **that**
+project, a page outside Azure DevOps (a fixed link) or an organization page (`_settings`) lands in the
+project the bookmarklet was taken from. Opening the **settings** page with `?url=<that page's URL>`
+instead fills the **project**-link form (FR-ADM-13). A value that is not an absolute `http(s)` URL (for
+example `javascript:alert(1)`) is ignored in both, and the text-only bookmarklet (no pinned project)
+does nothing on a page that names no project.
 (Automated: `acceptablePrefillUrl`, `addLinkBookmarklet`.)
 
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)

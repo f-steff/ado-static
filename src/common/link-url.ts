@@ -41,6 +41,12 @@ export function acceptablePrefillUrl(value: unknown): string {
   return url.length > 0 && url.length <= 2000 && isHttpUrl(url) ? url : "";
 }
 
+/** The project a bookmarklet falls back to when the page it is clicked on is not inside one. */
+export interface BookmarkletTarget {
+  org: string;
+  project: string;
+}
+
 /**
  * The `javascript:` bookmarklet that hands the current page's URL to the Links hub, which opens the
  * signed-in member's **private** link form with it.
@@ -49,23 +55,47 @@ export function acceptablePrefillUrl(value: unknown): string {
  * the code has to be built from the *installed* edition's ids - the released and development editions
  * differ only there - and has to be one self-contained expression, because a bookmarklet runs in
  * whatever page it is clicked on, not in the extension. It targets the Links hub rather than the
- * settings page because the result must be a private link, not a project link. The path segments are
- * already percent-encoded in `location.pathname`, so they are concatenated as-is (encoding them again
- * would double-encode a project name with a space).
+ * settings page because the result must be a private link, not a project link.
+ *
+ * Which project? The page's own project when it has one, so a page in another project lands there;
+ * otherwise the `target` captured where the link was installed. That fallback is what makes a **fixed
+ * link** work: its page is outside Azure DevOps, so there is no project to derive from the URL.
+ *
+ * Path segments are already percent-encoded in `location.pathname`, so they are used as-is (encoding
+ * them again would double-encode a project name with a space). The target's ids are encoded once, here,
+ * and embedded through `JSON.stringify` so a quote in a name cannot break the generated code.
  */
-export function addLinkBookmarklet(publisherId: string, extensionId: string): string {
+export function addLinkBookmarklet(
+  publisherId: string,
+  extensionId: string,
+  target?: BookmarkletTarget
+): string {
   const publisher = (publisherId || "").trim() || "f-steff";
   const extension = (extensionId || "").trim() || "static";
   const hub = `${publisher}.${extension}.static-links-hub`;
-  // On dev.azure.com the first path segment is the organization; on the legacy {org}.visualstudio.com
-  // host the organization is the first label of the host and the first segment is already the project.
+  const org = target && target.org ? target.org.trim() : "";
+  const project = target && target.project ? target.project.trim() : "";
+  // The fallback is emitted as source: a JSON string literal supplies the quotes and any escaping.
+  const fallback =
+    org && project
+      ? `{o:${JSON.stringify(encodeURIComponent(org))},p:${JSON.stringify(encodeURIComponent(project))}}`
+      : "null";
   return (
     "javascript:(()=>{" +
     "const s=location.pathname.split('/').filter(Boolean);" +
-    "const o=/\\.visualstudio\\.com$/.test(location.host)?location.host.split('.')[0]:s.shift();" +
-    "const p=s.shift()||'';" +
-    "if(!p)return;" +
-    "location.href='https://dev.azure.com/'+o+'/'+p+'/_apps/hub/" +
+    // Only an Azure DevOps page carries a project. On any other host (a fixed link's page, for example)
+    // the path says nothing, so the pinned target below must be used instead of a made-up project.
+    "const a=/\\.visualstudio\\.com$/.test(location.host);" +
+    "const d=location.host==='dev.azure.com';" +
+    "const o=a?location.host.split('.')[0]:s[0];" +
+    "const p=a?s[0]:(d?s[1]:undefined);" +
+    // A segment starting with '_' names an organization page (_settings, _usersSettings, ...), not a
+    // project, so it must not be mistaken for one.
+    "const t=p&&p[0]!=='_'?{o:o,p:p}:" +
+    fallback +
+    ";" +
+    "if(!t)return;" +
+    "location.href='https://dev.azure.com/'+t.o+'/'+t.p+'/_apps/hub/" +
     hub +
     "?url='+encodeURIComponent(location.href)" +
     "})()"

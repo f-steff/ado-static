@@ -66,7 +66,7 @@ constraint that shapes the requirement (see [05-navigation-and-urls.md](05-navig
 | FR-LINK-5 | A link may be **dynamic**: its URL carries `{{dyn}}` and a spec (latest / latest-succeeded / latest-failed build; newest/oldest open PR; latest commit on a branch) resolved when the link is opened. |
 | FR-LINK-6 | A dynamic build link may also target a **log** location, stored **by name** (`{{stage}}`/`{{job}}`/`{{task}}`) and resolved against the build at open time; a missing target shows a clear message. |
 | FR-LINK-7 | The Area column shows a short category: **Repo**, **PR**, **Pipeline**, **Artifact**, **Fixed**. |
-| FR-LINK-8 | The Links hub accepts `?url=<page URL>` and opens the **private-link** editor pre-filled; the About tab offers a bookmarklet for it (right-click -> Bookmark link), built for the installed edition. Only absolute `http(s)` URLs are accepted. |
+| FR-LINK-8 | The Links hub accepts `?url=<page URL>` and opens the **private-link** editor pre-filled; the About tab offers a bookmarklet for it (right-click -> Bookmark link), built for the installed edition. A page inside a project uses that project; any other page (a fixed link, an organization page) uses the project the link came from, so a fixed link still lands in the right project. Only absolute `http(s)` URLs are accepted. |
 
 ### PR hub
 

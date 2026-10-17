@@ -113,12 +113,20 @@ you share it with the project.
 The link is built from the installed edition's ids, so it is already correct for the edition you are
 running - there is nothing to edit.
 
-**The same bookmarklet as text** (released edition), for a browser that will not let you bookmark the
-link directly:
+The link the **About** tab offers also pins the project it came from. It uses the project of the page
+you click it on, and falls back to that pinned project - so a page **outside Azure DevOps** (a fixed
+link) still lands in the right project, and a page in another project lands in **that** project.
+
+**The same bookmarklet as text** (released edition, for a project you pick each time), for a browser
+that will not let you bookmark the link directly:
 
 ```js
-javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const o=/\.visualstudio\.com$/.test(location.host)?location.host.split('.')[0]:s.shift();const p=s.shift()||'';if(!p)return;location.href='https://dev.azure.com/'+o+'/'+p+'/_apps/hub/f-steff.static.static-links-hub?url='+encodeURIComponent(location.href)})()
+javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const a=/\.visualstudio\.com$/.test(location.host);const d=location.host==='dev.azure.com';const o=a?location.host.split('.')[0]:s[0];const p=a?s[0]:(d?s[1]:undefined);const t=p&&p[0]!=='_'?{o:o,p:p}:null;if(!t)return;location.href='https://dev.azure.com/'+t.o+'/'+t.p+'/_apps/hub/f-steff.static.static-links-hub?url='+encodeURIComponent(location.href)})()
 ```
+
+That form has no pinned project: it uses the project of the page you click it on and does nothing
+outside Azure DevOps, so get the link from the target project's own **About** tab when you need a
+bookmarklet that also works on an external page.
 
 Create a bookmark and paste the code into its address field (browsers strip `javascript:` when it is
 pasted into the address bar itself), and give it a name such as *Add to Static*.
