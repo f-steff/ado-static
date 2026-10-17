@@ -17,7 +17,7 @@
 | D11 | Documents are addressed by an explicit `id` in the body; `DELETE` by id works; an empty collection `LIST` returns 404. | OK |
 | D12 | Sizes use **1024-based (IEC)** units (`B`, `KiB`, `MiB`, `GiB`). | OK |
 | D13 | v1 publishes a **single self-contained HTML file** per page; multi-file pages are a later enhancement (Q15). | OK |
-| D14 | The **Static** group is **always visible**; there is no per-project or org-wide switch. Feature Management is CORS-blocked and contributions are static. | OK |
+| D14 | The **Static** group is **always visible**; there is no per-project or org-wide switch. Removing its icon on projects that do not use it was considered and is **not possible** (hub groups and their hubs are static manifest contributions, and Feature Management is CORS-blocked), so it is not implemented - an unused project simply shows empty hubs. | OK |
 | D15 | Two Marketplace editions of one code base: **`static`** (stable, from `main`) and **`static-dev`** (private, from `develop`), publisher `f-steff`. | OK |
 | D16 | Dynamic link targets that depend on a build are stored **by name** (`{{stage}}`/`{{job}}`/`{{task}}` plus `{{dyn}}`) and resolved at open time; a missing target shows a clear message. | OK |
 | D17 | The optional report tab attaches the page HTML to the build as a `static-page-html` attachment, shown by our own build-results tab (distinct from Html Reports' `report-html`). | OK |

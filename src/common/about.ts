@@ -3,6 +3,7 @@
 // Rationale: both settings pages present the same top-level explanation, so the content lives in
 // one place; each page decides where (and under which tab) to show it.
 import * as SDK from "azure-devops-extension-sdk";
+import { addLinkBookmarklet } from "./link-url";
 
 /** Tiny element factory (mirrors the one in the UI modules). */
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -23,6 +24,13 @@ function el<K extends keyof HTMLElementTagNameMap>(
 /** Builds the About/help content: what Static is, publishing, links, dynamics, trash, permissions. */
 export function buildAbout(): HTMLElement {
   const wrap = el("div", "help");
+
+  // The ids of the installed edition: the bookmarklet is built from them (so it is right for the
+  // released and the development edition alike) and the package table reports them, so read once.
+  const context = SDK.getExtensionContext();
+  const host = SDK.getHost();
+  const publisherId = (context && context.publisherId) || "f-steff";
+  const extensionId = (context && context.extensionId) || "static";
 
   const heading = (text: string) => wrap.appendChild(el("h3", undefined, text));
   const para = (text: string) => wrap.appendChild(el("p", undefined, text));
@@ -141,10 +149,26 @@ export function buildAbout(): HTMLElement {
       "then appears under Project settings -> Links as a proposed link that someone with access to those " +
       "settings can add or reject."
   );
+  heading("Adding a link from any page");
   para(
-    "To add a link for the page you are looking at, open this page with ?url=<that page's URL> - the " +
-      "bookmarklet in docs/07 does exactly that - and the link form arrives with the URL already filled " +
-      "and the builder matched."
+    "You do not have to come to this page first. Bookmark the link below rather than clicking it: " +
+      "right-click it and choose 'Bookmark link', or drag it to the bookmarks bar. Then click that " +
+      "bookmark on any page in a project and this settings page opens on Links with the URL already " +
+      "filled in and the builder matched. Title, slug and comment are still yours to fill in."
+  );
+  const bookmarkletLine = wrap.appendChild(el("p"));
+  const bookmarklet = el("a", "bookmarklet", "Add the page I am on to Static");
+  bookmarklet.setAttribute("href", addLinkBookmarklet(publisherId, extensionId));
+  bookmarklet.setAttribute(
+    "title",
+    "Right-click this link and choose 'Bookmark link' (or drag it to the bookmarks bar)."
+  );
+  bookmarkletLine.appendChild(bookmarklet);
+  para(
+    "Anything that can build a URL can do the same: open this settings page with ?url=<that page's " +
+      "URL>, which a wiki page or a pipeline comment can carry as an ordinary link. Used outside a " +
+      "project - the organization home, for example - the bookmarklet does nothing, because a link " +
+      "belongs to a project."
   );
 
   heading("Trash");
@@ -163,13 +187,12 @@ export function buildAbout(): HTMLElement {
   ]);
 
   heading("About this package");
-  // Dynamic values come from the SDK; the rest identify the published package.
-  const context = SDK.getExtensionContext();
-  const host = SDK.getHost();
+  // The publisher and extension ids come from the SDK (read once at the top); the rest identify the
+  // published package.
   const rows: Array<[string, string]> = [
     ["Package", "Static"],
-    ["Publisher", (context && context.publisherId) || "f-steff"],
-    ["Extension id", (context && context.extensionId) || "static"],
+    ["Publisher", publisherId],
+    ["Extension id", extensionId],
     ["Version", (context && context.version) || "0.0.0"],
     ["Author", "f-steff"],
     ["Repository", "https://github.com/f-steff/ado-static"],

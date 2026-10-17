@@ -107,18 +107,26 @@ Any Azure DevOps page can hand its own URL to this form. Open the settings page 
 cascading builder matched - for a build log URL the pipeline, build, view and stage/job/task target are
 selected too. Title, slug and comment are still yours to fill in.
 
-**Install it (released edition):** create a bookmark whose address is the following, then use it from
-any page in the project you want to add a link for.
+**The easy way:** the **About** tab carries the bookmarklet as a link. Right-click it and choose
+*Bookmark link* (or drag it to the bookmarks bar), then click that bookmark on any page in a project.
+The link is built from the installed edition's ids, so it is already correct for the edition you are
+running - there is nothing to edit.
+
+**The same bookmarklet as text** (released edition), for a browser that will not let you bookmark the
+link directly:
 
 ```js
-javascript:(()=>{const p=location.pathname.split('/').filter(Boolean);const org=/\.visualstudio\.com$/.test(location.host)?location.host.split('.')[0]:p.shift();const project=p.shift()||'';location.href='https://dev.azure.com/'+org+'/'+encodeURIComponent(project)+'/_settings/f-steff.static.static-admin-hub?url='+encodeURIComponent(location.href)})()
+javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const o=/\.visualstudio\.com$/.test(location.host)?location.host.split('.')[0]:s.shift();const p=s.shift()||'';if(!p)return;location.href='https://dev.azure.com/'+o+'/'+p+'/_settings/f-steff.static.static-admin-hub?url='+encodeURIComponent(location.href)})()
 ```
 
-Drag the bookmark to the bookmarks bar - browsers strip `javascript:` when it is pasted into the
-address bar itself - and give it a name such as *Add to Static*.
+Create a bookmark and paste the code into its address field (browsers strip `javascript:` when it is
+pasted into the address bar itself), and give it a name such as *Add to Static*.
 
 > **Development edition:** replace `f-steff.static` with `f-steff.static-dev` in the URL above.
 > Nothing else changes.
+
+Used outside a project - the organization home, for example - the bookmarklet does nothing: a link
+belongs to a project.
 
 The same URL can be built by anything, so a wiki page or a pipeline may offer *add this URL to Static*
 as an ordinary link:
