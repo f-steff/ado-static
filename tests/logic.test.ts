@@ -1059,3 +1059,21 @@ test("mergedRows filters on title, slug and comment, case-insensitively", () => 
     // No data at all is not an error.
     assert.deepEqual(mergedRows(null, [], ""), []);
 });
+
+// Regression (B10): the Security REST API wraps the namespace definition, and looking only at the top
+// level made every permission probe answer "unknown" - which fail-safely left every permission-aware
+// control visible, so the feature was inert without ever failing a test.
+test("findActionBit unwraps the namespace definition the REST API returns", () => {
+    const wrapped = {
+        count: 1,
+        value: [{ namespaceId: "52d39943-cb85-4d7f-8fa8-c6baac873819", name: "Project", actions: [{ name: "GENERIC_READ", bit: 1 }, { name: "MANAGE_PROPERTIES", bit: 16 }] }]
+    };
+    assert.equal(findActionBit(wrapped, "MANAGE_PROPERTIES"), 16);
+    assert.equal(findActionBit(wrapped, "generic_read"), 1);
+    assert.equal(findActionBit(wrapped, "missing"), null);
+    // Empty or malformed wrappers stay "unknown" rather than guessing.
+    assert.equal(findActionBit({ count: 0, value: [] }, "MANAGE_PROPERTIES"), null);
+    assert.equal(findActionBit({ count: 1, value: [null] }, "MANAGE_PROPERTIES"), null);
+    assert.equal(findActionBit({ count: 1, value: [{ name: "Project" }] }, "MANAGE_PROPERTIES"), null);
+    assert.equal(findActionBit({ count: 1, value: "nope" }, "MANAGE_PROPERTIES"), null);
+});
