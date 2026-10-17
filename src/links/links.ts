@@ -22,7 +22,7 @@ import {
   updatePrivateLink
 } from "../common/data-service";
 import { getHeading, iconFor } from "../common/branding";
-import { linkAreaLabel } from "../common/link-url";
+import { acceptablePrefillUrl, linkAreaLabel } from "../common/link-url";
 import { resolveLink } from "../common/dynamic-resolve";
 import { HUB_LINKS, pagesHubUrl } from "../common/extension-urls";
 import { getHostNavigation, HostNavigationService } from "../common/host-nav";
@@ -140,6 +140,24 @@ SDK.ready()
         } else {
           // The link is gone (or never existed): fall back to the list rather than an empty form.
           view = "list";
+        }
+      }
+      // A bookmarklet (or a plain link) can hand us the page it was used on: `?url=<page url>` opens the
+      // private-link editor pre-filled, so the member saves that page as their own link. Only absolute
+      // http(s) URLs are accepted (see acceptablePrefillUrl), and the value is never logged and never
+      // stored unless the link is saved.
+      const incomingUrl = acceptablePrefillUrl(currentQuery.url);
+      if (incomingUrl) {
+        view = "editor";
+        editingPrivateId = null;
+        notice = "";
+        linkEditor.reset();
+        linkEditor.parse(incomingUrl);
+        try {
+          // Keep the view addressable the same way the editor's own buttons do.
+          nav.setHash("add");
+        } catch {
+          // A hash we cannot set must not stop the form from opening.
         }
       }
       nav.onHashChanged((value) => {

@@ -100,14 +100,15 @@ Adding creates an ordinary project link from the frozen snapshot (attributed to 
 owner with a message. A proposal whose slug was taken since it was offered, or whose URL no longer has
 a valid shape, explains why and offers only **Reject**.
 
-#### Adding a link from any page (bookmarklet)
+#### Adding a private link from any page (bookmarklet)
 
-Any Azure DevOps page can hand its own URL to this form. Open the settings page with
-`?url=<that page's URL>` and it lands on the **Links** tab with the URL already in the field and the
-cascading builder matched - for a build log URL the pipeline, build, view and stage/job/task target are
-selected too. Title, slug and comment are still yours to fill in.
+Any Azure DevOps page can hand its own URL to the **Links** hub: open it with `?url=<that page's URL>`
+and the **private-link form** opens with the URL already in the field and the cascading builder matched
+- for a build log URL the pipeline, build, view and stage/job/task target are selected too. Title, slug
+and comment are still yours to fill in, and the link is **yours**: it stays visible only to you until
+you share it with the project.
 
-**The easy way:** the **About** tab carries the bookmarklet as a link. Right-click it and choose
+**Install it:** the **About** tab carries the bookmarklet as a link. Right-click it and choose
 *Bookmark link* (or drag it to the bookmarks bar), then click that bookmark on any page in a project.
 The link is built from the installed edition's ids, so it is already correct for the edition you are
 running - there is nothing to edit.
@@ -116,7 +117,7 @@ running - there is nothing to edit.
 link directly:
 
 ```js
-javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const o=/\.visualstudio\.com$/.test(location.host)?location.host.split('.')[0]:s.shift();const p=s.shift()||'';if(!p)return;location.href='https://dev.azure.com/'+o+'/'+p+'/_settings/f-steff.static.static-admin-hub?url='+encodeURIComponent(location.href)})()
+javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const o=/\.visualstudio\.com$/.test(location.host)?location.host.split('.')[0]:s.shift();const p=s.shift()||'';if(!p)return;location.href='https://dev.azure.com/'+o+'/'+p+'/_apps/hub/f-steff.static.static-links-hub?url='+encodeURIComponent(location.href)})()
 ```
 
 Create a bookmark and paste the code into its address field (browsers strip `javascript:` when it is
@@ -128,12 +129,16 @@ pasted into the address bar itself), and give it a name such as *Add to Static*.
 Used outside a project - the organization home, for example - the bookmarklet does nothing: a link
 belongs to a project.
 
-The same URL can be built by anything, so a wiki page or a pipeline may offer *add this URL to Static*
-as an ordinary link:
+Anything that can build a URL can do the same:
 
 ```
-https://dev.azure.com/{org}/{project}/_settings/{publisher}.{extension}.static-admin-hub?url={encoded url}
+Private link:  https://dev.azure.com/{org}/{project}/_apps/hub/{publisher}.{extension}.static-links-hub?url={encoded url}
+Project link:  https://dev.azure.com/{org}/{project}/_settings/{publisher}.{extension}.static-admin-hub?url={encoded url}
 ```
+
+The **settings page** accepts the same parameter and opens its **Links** tab instead, which creates a
+**project** link for everybody; that is the form to use when the link is meant for the whole project. The
+bookmarklet deliberately targets the hub, so it never creates a project link.
 
 The parameter is only read from the address bar. It is never logged, never stored (unless the link is
 saved) and any value that is not an absolute `http(s)` URL is ignored.

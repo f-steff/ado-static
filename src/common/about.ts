@@ -149,12 +149,13 @@ export function buildAbout(): HTMLElement {
       "then appears under Project settings -> Links as a proposed link that someone with access to those " +
       "settings can add or reject."
   );
-  heading("Adding a link from any page");
+  heading("Adding a private link from any page");
   para(
     "You do not have to come to this page first. Bookmark the link below rather than clicking it: " +
       "right-click it and choose 'Bookmark link', or drag it to the bookmarks bar. Then click that " +
-      "bookmark on any page in a project and this settings page opens on Links with the URL already " +
-      "filled in and the builder matched. Title, slug and comment are still yours to fill in."
+      "bookmark on any page in a project and the Links hub opens with your private-link form already " +
+      "filled in and the builder matched - the link stays visible only to you until you share it. " +
+      "Title, slug and comment are still yours to fill in."
   );
   const bookmarkletLine = wrap.appendChild(el("p"));
   const bookmarklet = el("a", "bookmarklet", "Add the page I am on to Static");
@@ -165,10 +166,11 @@ export function buildAbout(): HTMLElement {
   );
   bookmarkletLine.appendChild(bookmarklet);
   para(
-    "Anything that can build a URL can do the same: open this settings page with ?url=<that page's " +
-      "URL>, which a wiki page or a pipeline comment can carry as an ordinary link. Used outside a " +
-      "project - the organization home, for example - the bookmarklet does nothing, because a link " +
-      "belongs to a project."
+    "Anything that can build a URL can do the same. Opening the Links hub with ?url=<that page's URL> " +
+      "offers the page as a private link; opening these settings with ?url=<that page's URL> offers it " +
+      "as a project link instead, which is what a wiki page or a pipeline comment uses when the link is " +
+      "meant for everyone. Used outside a project - the organization home, for example - the bookmarklet " +
+      "does nothing, because a link belongs to a project."
   );
 
   heading("Trash");
