@@ -29,19 +29,23 @@ Members can keep **private links** of their own in the Links hub - visible only 
 to the project with **Share**, which adds it to the project settings as a proposed link for whoever
 manages those settings to accept or reject.
 
-## Add a link from the page you are on
+## Add a private link from the page you are on
 
 The **About** tab of the settings pages carries a ready-made bookmarklet: right-click it and choose
-*Bookmark link* (or drag it to the bookmarks bar). Click that bookmark on any project page and the link
-form opens with the URL already filled in and the builder matched - for a build log URL down to the
-stage/job/task target. Title, slug and comment are still yours to write.
+*Bookmark link* (or drag it to the bookmarks bar). Click that bookmark on any project page and the
+**Links** hub opens with your **private** link form already filled in and the builder matched - for a
+build log URL down to the stage/job/task target. The link stays visible only to you until you share it.
 
 Anything that can build a URL can do the same, so a wiki page or a pipeline comment can offer *add this
 URL to Static* as an ordinary link:
 
 ```
-https://dev.azure.com/{org}/{project}/_settings/{publisher}.{extension}.static-admin-hub?url={encoded page url}
+https://dev.azure.com/{org}/{project}/_apps/hub/{publisher}.{extension}.static-links-hub?url={encoded page url}
 ```
+
+Project administrators can use the settings page for a link everybody should see:
+`.../_settings/{publisher}.{extension}.static-admin-hub?url=...` opens the Links tab, which creates a
+**project** link instead.
 
 ## What you can publish from a pipeline
 

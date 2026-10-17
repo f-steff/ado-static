@@ -72,7 +72,7 @@ pure logic that previously had to be checked by hand:
 | AT-16 | Proposal reconciliation | open keeps its marker, accepted removes the private original, rejected marks it, a missing record is forgotten, an orphaned proposal is withdrawn, other members' proposals are untouched | TC-87..TC-89 |
 | AT-17 | Merged Links list | project + private rows in one list, hidden project links omitted, `project`/`private`/`pending` statuses, alphabetical order, and matching on title/slug/comment (case-insensitive) | TC-91 |
 | AT-18 | Pre-fill guard | `acceptablePrefillUrl` accepts absolute http(s) URLs within the length cap, and ignores `javascript:`/`data:`/`file:`/non-strings/over-long values | TC-92 |
-| AT-19 | Bookmarklet builder | `addLinkBookmarklet` embeds the given edition's ids, handles dev.azure.com and {org}.visualstudio.com pages, does not double-encode an already-encoded project segment, and leaves the page alone outside a project | TC-92 |
+| AT-19 | Bookmarklet builder | `addLinkBookmarklet` targets the **Links hub** (the private-link form, never the settings page), embeds the given edition's ids, handles dev.azure.com and {org}.visualstudio.com pages, does not double-encode an already-encoded project segment, and leaves the page alone outside a project | TC-92 |
 | AT-20 | Error reporting | `describeError` returns the Error message, a plain object's `message` with its name, the JSON body's message from `responseText`, the name plus HTTP status when there is no body, and a bounded fallback - never `[object Object]` | B11 |
 
 ## Test cases
@@ -632,18 +632,18 @@ link) and `link-proposals` (proposals are project data). There is **no** `privat
 a private link that was never promoted appears nowhere in the archive. Restoring that backup leaves
 every user's private links untouched.
 
-### TC-92  -  Add a link from any page  (FR-ADM-13)
+### TC-92  -  Add a private link from any page  (FR-LINK-8, FR-ADM-13)
 Open Project settings -> **About** and check the bookmarklet link: it must carry the installed
-edition's id (`f-steff.static.static-admin-hub` released, `f-steff.static-dev.static-admin-hub`
+edition's id (`f-steff.static.static-links-hub` released, `f-steff.static-dev.static-links-hub`
 development), and right-clicking it must offer *Bookmark link* (dragging it to the bookmarks bar does
-the same). Then, on any Azure DevOps page (a build's log view is a good one), click that bookmark - or
-open the settings page directly with `?url=<that page's URL>`.
-**Expected:** the project's Static settings page opens on the **Links** tab with the URL field filled
-and the cascading builder matched (a build log URL yields the pipeline/build/view and the
-stage/job/task target); the primary button enables once title and slug are filled. Opening the settings
-page without the parameter is unaffected, and a value that is not an absolute `http(s)` URL (for example
-`javascript:alert(1)`) is ignored rather than pre-filled. Used outside a project (the organization home)
-the bookmarklet leaves the page alone.
+the same). Then, on any Azure DevOps page (a build's log view is a good one), click that bookmark.
+**Expected:** the **Links hub** opens with the **private-link** form shown, its URL field filled and the
+cascading builder matched (a build log URL yields the pipeline/build/view and the stage/job/task
+target); the primary button reads *Add private link*, and saving keeps the link in the user's own scope
+(Status `private`). Opening the **settings** page with `?url=<that page's URL>` instead fills the
+**project**-link form (FR-ADM-13). A value that is not an absolute `http(s)` URL (for example
+`javascript:alert(1)`) is ignored in both, and used outside a project the bookmarklet leaves the page
+alone.
 (Automated: `acceptablePrefillUrl`, `addLinkBookmarklet`.)
 
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
@@ -682,7 +682,7 @@ member identity signed in, the same run completed on 0.2.15.
 
 Run on 2026-10-17 against the deployed `static-dev` 0.2.12, as the owner. The extension id in the URL
 is the development one because that is the edition installed in the test organization; the released
-edition differs only by that id (see the note in [07](07-admin-experience.md#adding-a-link-from-any-page-bookmarklet)).
+edition differs only by that id (see the note in [07](07-admin-experience.md#adding-a-private-link-from-any-page-bookmarklet)).
 
 | Case | Result | Evidence |
 | --- | --- | --- |
