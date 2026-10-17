@@ -659,6 +659,15 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.2.12 (dev edition) - add a link from the page you are looking at (TC-92)
+
+Run on 2026-10-17 against the deployed `static-dev` 0.2.12, as the owner.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-92 (bookmarklet) | OK | From a real build page (`?buildId=2&view=logs`) the bookmarklet's own code navigated to that project's settings page with `?url=<encoded page URL>`; it opened on the **Links** tab with the URL field filled (`...&j={{job}}`) and the builder pre-selected: **Pipeline** -> `static-demo` -> **Specific build...** -> `Build 2 (succeeded) - 2026-10-15 [valid]` -> `Logs: Publish links [valid]`, with the note "Detected a pipeline link; adjust any level below." Title and slug are correctly left empty for the user |
+| TC-92 (guard) | OK | The same page with `?url=javascript:alert(1)` left the URL field empty and the builder untouched, so a crafted query cannot pre-fill a non-http(s) target; the pure guard `acceptablePrefillUrl` is unit-tested too |
+
 ### 0.2.11 (dev edition) - the permission negatives, with a demoted identity
 
 Run on 2026-10-17 against the deployed `static-dev` 0.2.11, with the second identity (Q18) holding **no**
@@ -934,6 +943,7 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.2.9 | OK | OK | **B10** fixed: the permission probes now evaluate (the namespace definition is unwrapped), so the permission-aware controls follow the answer instead of always falling back to visible; tests 84/84 |
 | 0.2.10 | OK | OK | Publishing authenticates with the **Microsoft Entra identity** through GitHub OIDC (the federated credential is fixed), with the PAT still as a fallback while the change was proven |
 | 0.2.11 | OK | OK | The PAT fallback removed (no repository secret left); a publish with no PAT available proves the identity alone works. Permission-aware UI complete: TC-83/TC-84 verified in both directions with a non-administrator second identity |
+| 0.2.12 | OK | OK | **Add a link from any page**: the settings page accepts `?url=<page URL>` and pre-fills the form (the bookmarklet in docs/07, FR-ADM-13); verified from a real build page, including the log-target pre-selection and the non-http(s) guard; tests 85/85 |
 | 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed
