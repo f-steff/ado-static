@@ -647,6 +647,26 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.2.8 / 0.2.9 (dev edition) - a second identity: isolation, and a probe bug
+
+Run on 2026-10-17 against the deployed `static-dev`, with **two** identities in separate browser
+sessions: the publisher/owner and a second member (Q18).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-86 | OK | With the owner's `Alpha report` private link (status `pending`) and the member's `Beta note`: each sees **only its own** private row, neither sees the other's, every row carries the right status (`project` / `private` / `pending`), and `?page=alpha-report` as the member answers "No link with the slug 'alpha-report' exists in this project." The project links are identical for both. The user scope does the isolation - neither user's row appears in the other's store |
+| TC-91 (re-run) | OK | The merged list, the three statuses, the right-aligned content-sized Status/Actions columns and the icons were re-verified on 0.2.8 with both identities (the filter itself was verified on 0.2.7; 0.2.8 changed only the hash handling) |
+| Cosmetic (0.2.8) | OK | `#list` replaces the bare `#`: opening the editor gives `#edit=<linkId>` and Cancel returns to `#list`, so the URL never ends in a lone `#` |
+| TC-83 | OK (positive) / NOTE | The project probe now evaluates: the member's call is `permissions/52d39943-.../131072 -> 200 {"value":[true]}` (`MANAGE_PROPERTIES`), so the hub says "Add a project link under Project settings -> Static -> Links" for both identities. The **negative** wording needs an identity without project-settings access, and neither test identity is one - see below |
+| TC-84 | OK (positive) / NOTE | Same for the collection probe: `permissions/3e65f728-.../2 -> 200 {"value":[true]}` (`GENERIC_WRITE`), so the **Org.Settings** button is present for both identities. Correct - and the negative half (button absent) needs an identity without those rights |
+| B10 | FAIL -> fixed | The probes never evaluated at all: they fetched the namespace definition (200) and never asked for a permission, because the API wraps the definition as `{count, value:[{...actions...}]}` while `findActionBit` looked for `actions` at the top level. Unknown is published as "keep the control visible", so the feature was inert yet never failed a test. Fixed in 0.2.9 (both shapes accepted, with a regression test) and re-verified live: the member's probe now issues the `permissions/...` call and the control follows the answer |
+
+To finish the negative halves of TC-83/TC-84 the test identity has to lose the rights it holds today
+(it is effectively both a project and a collection administrator): removing it from the organization's
+**Project Collection Administrators** group and giving it plain membership of one test project (the
+empty project created for this check) would produce the "ask a project administrator" wording and hide
+the **Org.Settings** button. Recorded in Q17/Q18.
+
 ### 0.2.6 / 0.2.7 (dev edition) - one merged Links list with a Status column and a filter
 
 Run on 2026-10-16 against the deployed `static-dev` in the test project (which the pipelines now fill
@@ -882,6 +902,8 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.2.2 | OK | OK | **Private links** (user-scoped store) and **proposing** one to the project: two tables in the Links hub, Edit/Delete/Share on one row, the shared link editor, and Add to project / Reject with promotion; the confirmation dialog moved to a shared stylesheet (B8); tests 81/81 |
 | 0.2.6 | OK | FAIL | **One merged Links list** (Status `project`/`private`/`pending`, Status+Actions right-aligned and content-sized, alphabetical, filter over title/slug/comment); the list rendered **empty** (B9) |
 | 0.2.7 | OK | OK | B9 fixed (rows rendered after the table is attached); the merged list, the statuses, the column sizing and all four filter behaviours verified; tests 83/83 |
+| 0.2.8 | OK | OK | The list's address is `#list` instead of a bare `#`; private-link isolation verified with a second identity (TC-86) |
+| 0.2.9 | OK | OK | **B10** fixed: the permission probes now evaluate (the namespace definition is unwrapped), so the permission-aware controls follow the answer instead of always falling back to visible; tests 84/84 |
 | 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed
