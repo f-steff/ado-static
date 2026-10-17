@@ -38,6 +38,10 @@ Before finishing any change, scan for accidental instance identifiers.
 - Keep documentation consistent: use the existing headings, the FR/NFR ID scheme, and the
   status legend in `docs/README.md`.
 - Do not re-introduce the deleted brainstorming file `azure-devops-custom-html-hosting.md`.
+- The Marketplace listing text is [`marketplace-advertisement.md`](marketplace-advertisement.md), referenced
+  by the manifest's `content.details` and packaged into the VSIX. It is advertising copy for the
+  Marketplace, not repository documentation: never delete or rename it without updating
+  `ado-manifests/azure-devops-extension-base.json` (and the comment in the publish workflows).
 - Prefer editing existing documents over creating new top-level files.
 - Keep the docs factual: mark unverified claims as SPIKE and record outcomes in
   [`docs/08-open-questions.md`](docs/08-open-questions.md).

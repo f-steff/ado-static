@@ -54,7 +54,7 @@ Key points:
 - `files` ships `dist` (addressable) plus the individual PNG icons and the two task folders.
 - Scopes: `vso.extension.data_write` (our own data), `vso.code` (repos/commits/PRs),
   `vso.build` (pipelines/builds/timelines).
-- The Marketplace listing content (`overview.md`, `LICENSE`), `repository`, `links`, `tags` and
+- The Marketplace listing content (`marketplace-advertisement.md`, `LICENSE`), `repository`, `links`, `tags` and
   `categories` live in the base manifest.
 
 ## Runtime patterns

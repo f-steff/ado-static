@@ -177,7 +177,7 @@ computed inside the job cannot appear in the Actions list. The workflows compens
 
 A publish is skipped when **every** changed path in the push is documentation, the CI/release
 scripts (`ci/**`), tests, or repository housekeeping (`paths-ignore`) - such a push cannot change the
-shipped extension, so it must not mint a version. `overview.md` and `LICENSE` are packaged into the
+shipped extension, so it must not mint a version. `marketplace-advertisement.md` and `LICENSE` are packaged into the
 VSIX and are deliberately **not** ignored; neither is `scripts/**`, because that tooling decides what
 ends up in the package. A mixed push still publishes. The local `t/` scratch folder (archived
 migration material, downloaded backups) is gitignored outright - it must never be committed.
