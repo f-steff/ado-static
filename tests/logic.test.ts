@@ -24,7 +24,7 @@ import { findActionBit, readPermissionValue } from "../src/common/permission-par
 import { buildViewSpecs, composePath, consumedParams, isFixedArea, targetMatches, viewKeyForValue } from "../src/common/builder-core";
 import { buildBundle, backupFileName, decodeBundle, encodeBundle, parseBundle } from "../src/common/backup";
 import { crc32, readZip, writeZip } from "../src/common/zip";
-import { acceptablePrefillUrl, fixedUrlError, isHttpUrl, linkAreaLabel } from "../src/common/link-url";
+import { acceptablePrefillUrl, addLinkBookmarklet, fixedUrlError, isHttpUrl, linkAreaLabel } from "../src/common/link-url";
 import { isValidPullRequestId, pullRequestWebUrl } from "../src/common/pr-url";
 import { formatBytes, formatBytesWhole, formatRelativeTime } from "../src/common/format";
 import {
@@ -1097,4 +1097,51 @@ test("acceptablePrefillUrl accepts only absolute http(s) URLs within the length 
     assert.equal(acceptablePrefillUrl(42), "");
     // A pathological length is refused rather than echoed into the form.
     assert.equal(acceptablePrefillUrl("https://example.com/" + "a".repeat(2100)), "");
+});
+
+// ---- The About tab's add-to-Static bookmarklet (FR-ADM-13) ---------------------------------
+
+test("addLinkBookmarklet builds a self-contained bookmarklet for the installed edition", () => {
+    const stable = addLinkBookmarklet("f-steff", "static");
+    assert.ok(stable.startsWith("javascript:("));
+    // The project settings hub is the page that owns the link form.
+    assert.ok(stable.includes("/_settings/f-steff.static.static-admin-hub?url="));
+    // The development edition differs only by its extension id, which is why the id is a parameter.
+    assert.ok(addLinkBookmarklet("f-steff", "static-dev").includes("/_settings/f-steff.static-dev.static-admin-hub?url="));
+    // Defensive: an unavailable SDK context falls back to the released ids.
+    assert.equal(addLinkBookmarklet("", ""), stable);
+    // Pinned so the code block in docs/07 cannot drift from what the extension generates.
+    assert.equal(
+        stable,
+        "javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const o=/\\.visualstudio\\.com$/.test(location.host)?location.host.split('.')[0]:s.shift();const p=s.shift()||'';if(!p)return;location.href='https://dev.azure.com/'+o+'/'+p+'/_settings/f-steff.static.static-admin-hub?url='+encodeURIComponent(location.href)})()"
+    );
+});
+
+test("addLinkBookmarklet hands the current page URL to the project settings page", () => {
+    // Run the bookmarklet body with a fake `location`, exactly as a browser would on that page.
+    const run = (href: string, pathname: string, host: string, current: string) => {
+        const fake = { pathname, host, href: current };
+        new Function("location", href.slice("javascript:".length))(fake);
+        return fake.href;
+    };
+    const page = "https://dev.azure.com/contoso/SampleProject/_build/results?buildId=42&view=logs";
+    assert.equal(
+        run(addLinkBookmarklet("f-steff", "static"), "/contoso/SampleProject/_build/results", "dev.azure.com", page),
+        "https://dev.azure.com/contoso/SampleProject/_settings/f-steff.static.static-admin-hub?url=" + encodeURIComponent(page)
+    );
+    // Path segments are already encoded, so a project name with a space must not be encoded twice.
+    const spaced = "https://dev.azure.com/contoso/My%20Project/_build";
+    assert.equal(
+        run(addLinkBookmarklet("f-steff", "static"), "/contoso/My%20Project/_build", "dev.azure.com", spaced),
+        "https://dev.azure.com/contoso/My%20Project/_settings/f-steff.static.static-admin-hub?url=" + encodeURIComponent(spaced)
+    );
+    // On the legacy host the organization is in the host name, so the first segment is the project.
+    const legacy = "https://contoso.visualstudio.com/SampleProject/_build";
+    assert.equal(
+        run(addLinkBookmarklet("f-steff", "static"), "/SampleProject/_build", "contoso.visualstudio.com", legacy),
+        "https://dev.azure.com/contoso/SampleProject/_settings/f-steff.static.static-admin-hub?url=" + encodeURIComponent(legacy)
+    );
+    // Outside a project (the organization home) there is nothing to add, so the page is left alone.
+    const home = "https://dev.azure.com/contoso/";
+    assert.equal(run(addLinkBookmarklet("f-steff", "static"), "/contoso/", "dev.azure.com", home), home);
 });

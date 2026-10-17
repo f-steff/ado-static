@@ -42,6 +42,35 @@ export function acceptablePrefillUrl(value: unknown): string {
 }
 
 /**
+ * The `javascript:` bookmarklet that hands the current page's URL to the project settings page.
+ *
+ * Rationale: the About tab offers this as a link the user bookmarks (right-click -> Bookmark link), so
+ * the code has to be built from the *installed* edition's ids - the released and development editions
+ * differ only there - and has to be one self-contained expression, because a bookmarklet runs in
+ * whatever page it is clicked on, not in the extension. The hub is the project settings page, which is
+ * where the link form lives. The path segments are already percent-encoded in `location.pathname`, so
+ * they are concatenated as-is (encoding them again would double-encode a project name with a space).
+ */
+export function addLinkBookmarklet(publisherId: string, extensionId: string): string {
+  const publisher = (publisherId || "").trim() || "f-steff";
+  const extension = (extensionId || "").trim() || "static";
+  const hub = `${publisher}.${extension}.static-admin-hub`;
+  // On dev.azure.com the first path segment is the organization; on the legacy {org}.visualstudio.com
+  // host the organization is the first label of the host and the first segment is already the project.
+  return (
+    "javascript:(()=>{" +
+    "const s=location.pathname.split('/').filter(Boolean);" +
+    "const o=/\\.visualstudio\\.com$/.test(location.host)?location.host.split('.')[0]:s.shift();" +
+    "const p=s.shift()||'';" +
+    "if(!p)return;" +
+    "location.href='https://dev.azure.com/'+o+'/'+p+'/_settings/" +
+    hub +
+    "?url='+encodeURIComponent(location.href)" +
+    "})()"
+  );
+}
+
+/**
  * A short Area label for a stored link, matching the builder's area vocabulary
  * (Repo, PR, Pipeline, Artifact, Fixed). Derived from the URL so it is stable for old links; the
  * stored `area` wins when it is "fixed".
