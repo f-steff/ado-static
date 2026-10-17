@@ -664,6 +664,20 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.2.13 / 0.2.14 (dev edition) - the About-tab bookmarklet, and readable failures
+
+Run on 2026-10-18 against the deployed `static-dev`.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-92 (About link) | OK | On 0.2.13 the About tab shows **Adding a link from any page** with the link *Add the page I am on to Static*, the tooltip "Right-click this link and choose 'Bookmark link' (or drag it to the bookmarks bar)." and a grab cursor. Its href carries the **installed** edition (`/_settings/f-steff.static-dev.static-admin-hub?url=`), and the package table agrees (`Publisher=f-steff`, `Extension id=static-dev`) |
+| B11 | FAIL -> fixed | The page and the host banner showed `[object Object]` when initialization failed. The account in use is not in the organization's directory, so the REST client rejected with `TFS.WebApi.Exception` - which has no `message`; the server's text sits in `responseText`, and `describeError` fell through to `String(error)`. Fixed in 0.2.14 and re-verified live: on 0.2.14 both the page and the banner read `TFS.WebApi.Exception: TF400813: The user is not authorized ... not a member of the AAD directory ...` |
+| TC-92 (end to end) | NOTE | The About link's own code could not be run from a build page in this round: the session was signed in with an identity outside the organization (the 401 above), so the settings page cannot load its data and cannot pre-fill. The pre-fill itself is verified on 0.2.12; the remaining step is one run with a member of the organization |
+
+The 401 is not a Static problem - the host refuses the account before any extension data is read - but
+it made a useful test case for B11, and it is why the error text matters: the message names exactly
+what is wrong.
+
 ### 0.2.12 (dev edition) - add a link from the page you are looking at (TC-92)
 
 Run on 2026-10-17 against the deployed `static-dev` 0.2.12, as the owner. The extension id in the URL
@@ -951,6 +965,8 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.2.10 | OK | OK | Publishing authenticates with the **Microsoft Entra identity** through GitHub OIDC (the federated credential is fixed), with the PAT still as a fallback while the change was proven |
 | 0.2.11 | OK | OK | The PAT fallback removed (no repository secret left); a publish with no PAT available proves the identity alone works. Permission-aware UI complete: TC-83/TC-84 verified in both directions with a non-administrator second identity |
 | 0.2.12 | OK | OK | **Add a link from any page**: the settings page accepts `?url=<page URL>` and pre-fills the form (the bookmarklet in docs/07, FR-ADM-13); verified from a real build page, including the log-target pre-selection and the non-http(s) guard; tests 85/85 |
+| 0.2.13 | OK | NOTE | The **About** tab carries the add-to-Static bookmarklet as a right-clickable link built from the installed edition's ids; verified on the deployed page (dev id, tooltip, grab cursor). The end-to-end run from a build page needs a member session - see the results block |
+| 0.2.14 | OK | OK | **Readable failures**: `describeError` reports the server's message (`responseText`), name and HTTP status, so a directory mismatch reads TF400813 instead of `[object Object]` on the page and in the host banner (B11); tests 88/88 |
 | 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed
