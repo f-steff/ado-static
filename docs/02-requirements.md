@@ -30,6 +30,7 @@ constraint that shapes the requirement (see [05-navigation-and-urls.md](05-navig
 | FR-ADM-10 | Deleting a page or link moves it to a shared **Trash** where it can be **restored** or **deleted instantly**; trashed slugs stay reserved and entries are purged after **5 days**. |
 | FR-ADM-11 | Administrators can add/edit/delete **links** (Title, unique slug, URL, comment) using a cascading builder. |
 | FR-ADM-12 | The Trash table shows a **Permanent delete by** column (`deletedUtc` + 5 days). |
+| FR-ADM-13 | The settings page accepts `?url=<page URL>` and pre-fills the link form with it (the bookmarklet in [07](07-admin-experience.md#adding-a-link-from-any-page-bookmarklet)); only absolute `http(s)` URLs are accepted, and the value is neither logged nor stored unless the link is saved. |
 
 ### Content & publishing
 

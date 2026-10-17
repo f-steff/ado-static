@@ -41,7 +41,7 @@ import { el, textField } from "../common/dom";
 import { PipelineSummary, getPipelineSummaries } from "../common/build-service";
 import { checkProjectUrl } from "../common/ado-url";
 import { DYNAMIC_TOKEN, DynamicSpec } from "../common/dynamic-links";
-import { isHttpUrl, linkAreaLabel } from "../common/link-url";
+import { acceptablePrefillUrl, isHttpUrl, linkAreaLabel } from "../common/link-url";
 import { acceptanceError } from "../common/private-links";
 import { LinkDraft, createLinkEditor } from "../common/link-editor";
 import { confirmDialog } from "../common/dialog";
@@ -146,6 +146,16 @@ SDK.ready()
       const initialTab = (await nav.getHash() || "").replace(/^#/, "");
       if (isAdminTab(initialTab)) {
         activeTab = initialTab;
+      }
+      // A bookmarklet (or a plain link) can hand us the page it was used on: `?url=<page url>` opens the
+      // Links tab with the form pre-filled. Only absolute http(s) URLs are accepted (see
+      // acceptablePrefillUrl), and the value is never logged and never stored unless the link is saved.
+      const params = (await nav.getQueryParams()) || {};
+      const incomingUrl = acceptablePrefillUrl(params.url);
+      if (incomingUrl) {
+        activeTab = "links";
+        linkEditor.parse(incomingUrl);
+        logInfo("Pre-filled the link form from the address bar.");
       }
       nav.onHashChanged((value) => {
         const id = (value || "").replace(/^#/, "");

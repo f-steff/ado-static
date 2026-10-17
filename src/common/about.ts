@@ -141,6 +141,11 @@ export function buildAbout(): HTMLElement {
       "then appears under Project settings -> Links as a proposed link that someone with access to those " +
       "settings can add or reject."
   );
+  para(
+    "To add a link for the page you are looking at, open this page with ?url=<that page's URL> - the " +
+      "bookmarklet in docs/07 does exactly that - and the link form arrives with the URL already filled " +
+      "and the builder matched."
+  );
 
   heading("Trash");
   para(
