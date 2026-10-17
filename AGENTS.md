@@ -88,6 +88,25 @@ confusing. This applies to **all code files in this repository and in any git-ig
   (security decisions, platform quirks, workarounds, non-obvious ordering).
 - Keep comments accurate; update them whenever behaviour changes.
 
+### Readable by a human first (mandatory)
+
+Correct is not enough: the code must be **easy to read**. A reviewer should understand a file from
+top to bottom without running it and without decoding one-liners.
+
+- Write the plain, boring version. Name intermediate values instead of nesting expressions, split a
+  long condition into named booleans, and prefer a small function over a clever chain.
+- One statement per line. No dense one-liners that pack a whole operation - or a whole element
+  factory call - into a single expression.
+- Names carry meaning: no single-letter variables outside a two-line loop or a callback argument,
+  and booleans read as assertions (`isVisible`, `canEdit`).
+- A function does one thing. If its purpose needs a paragraph in the comment, split it.
+- Keep the existing formatting: indentation, a blank line between logical blocks, and the file's
+  current line width.
+- The same bar applies to tests, build and CI scripts, pipeline YAML and PowerShell. Generated or
+  vendored output (`dist/`, `node_modules/`) is exempt.
+- A change that is correct but unreadable is **not done**: readability is a review criterion, not a
+  preference. When touching a file, leave it clearer than you found it.
+
 ---
 
 ## 5. ASCII-only text (mandatory)
