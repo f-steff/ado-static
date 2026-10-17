@@ -661,7 +661,9 @@ is installed - verified with build 4595 in such an organization.)
 
 ### 0.2.12 (dev edition) - add a link from the page you are looking at (TC-92)
 
-Run on 2026-10-17 against the deployed `static-dev` 0.2.12, as the owner.
+Run on 2026-10-17 against the deployed `static-dev` 0.2.12, as the owner. The extension id in the URL
+is the development one because that is the edition installed in the test organization; the released
+edition differs only by that id (see the note in [07](07-admin-experience.md#adding-a-link-from-any-page-bookmarklet)).
 
 | Case | Result | Evidence |
 | --- | --- | --- |
