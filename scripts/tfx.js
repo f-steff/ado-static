@@ -138,11 +138,17 @@ function orgList(value) {
   return (value || "").split(/[\s,]+/).filter(Boolean);
 }
 
-/** Appends the Marketplace token when the environment provides one. */
+/**
+ * Appends the publishing token when the environment provides one.
+ *
+ * Rationale: `--auth-type pat` is what tfx wants for a Marketplace PAT *and* for a Microsoft Entra
+ * access token - the documented way to publish without a PAT - so one flag covers both. The token
+ * arrives in TFS_PAT either way (the workflows put the OIDC token there).
+ */
 function appendToken(args) {
   const token = process.env.TFS_PAT;
   if (token) {
-    args.push("--token", token);
+    args.push("--auth-type", "pat", "--token", token);
   }
   return args;
 }
