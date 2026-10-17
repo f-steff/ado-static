@@ -38,6 +38,7 @@ run-name: "Publish stable (release)"
 permissions:
   contents: write
   statuses: write
+  id-token: write # request the GitHub OIDC token for the publishing identity
 
 # Serialize with the dev publish: the two editions share one tag sequence, so publishes must not
 # interleave. A queued run recomputes its version from the tags when it starts.
@@ -48,6 +49,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-24.04 # pinned: ubuntu-latest migrates to Ubuntu 26 in October 2026
+    environment: marketplace # matches the federated credential's subject
     steps:
       - uses: actions/checkout@v7
         with:
@@ -72,9 +74,37 @@ jobs:
         run: node ci/version.mjs stable --write-all | tee -a "$GITHUB_OUTPUT"
       - name: Build (production)
         run: npm run build:prod
-      - name: Publish stable extension
+      # The publishing token, best first: a Microsoft Entra access token obtained with the GitHub
+      # OIDC token (no stored secret), falling back to the PAT secret while the identity is being
+      # proven. 499b84ac-1321-427f-aa17-267ca6975798 is the well-known Azure DevOps / Visual Studio
+      # resource id.
+      - name: Sign in for the publishing token (OIDC, no secret)
+        if: vars.AZURE_CLIENT_ID != ''
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Acquire the publishing token
         env:
-          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
+          PAT: ${{ secrets.MARKETPLACE_PAT }}
+        run: |
+          TOKEN=""
+          if [ -n "${{ vars.AZURE_CLIENT_ID }}" ]; then
+            TOKEN="$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv 2>/dev/null || true)"
+          fi
+          if [ -n "$TOKEN" ]; then
+            echo "::add-mask::$TOKEN"
+            echo "TFS_PAT=$TOKEN" >> "$GITHUB_ENV"
+            echo "Publishing with a **Microsoft Entra** token (OIDC, no secret)." >> "$GITHUB_STEP_SUMMARY"
+          elif [ -n "$PAT" ]; then
+            echo "TFS_PAT=$PAT" >> "$GITHUB_ENV"
+            echo "Publishing with the **PAT** secret (no usable OIDC identity)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No publishing token: neither an OIDC identity nor the PAT secret is available."
+            exit 1
+          fi
+      - name: Publish stable extension
         run: npm run publish:stable
       - name: Tag the published version
         run: |
@@ -85,16 +115,12 @@ jobs:
       # The same build with the dev manifest, so the released code is testable under the dev edition
       # and both editions carry the same version until `develop` moves on.
       - name: Publish dev edition at the same version
-        env:
-          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
         run: npm run publish:dev
       # Best effort: the upload is accepted and the tag is pushed, so the *asynchronous* Marketplace
       # validation must never fail the run - a status poll once flaked and left a published version
       # untagged (Q19/D29). The state goes into the summary instead.
       - name: Report the validation state
         if: always()
-        env:
-          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
         run: |
           STABLE_VALIDATION="$(node scripts/tfx.js validate stable 2>&1 || true)"
           DEV_VALIDATION="$(node scripts/tfx.js validate dev 2>&1 || true)"
