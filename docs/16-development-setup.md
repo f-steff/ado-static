@@ -112,6 +112,14 @@ Publishing authenticates with a **Microsoft Entra identity through GitHub OIDC**
 - There is **no personal access token** any more: `MARKETPLACE_PAT` was deleted, so the Azure DevOps
   global PAT retirement (2026-12-01) does not touch publishing ([D30](08-open-questions.md)).
 
+> **What the publisher's Members page shows.** It lists two entries: the publisher account (role
+> *Owner*) and this **publishing identity** (role *Contributor*). A service principal has no friendly
+> user name in that list, so it appears as `<Entra tenant id>\<service principal object id>` - first the
+> directory that holds the `ado-static-publisher` app registration, then the identity's own object id.
+> That string is an **identifier, not a credential**: it cannot be used to publish anything without the
+> federated credential, which only this repository's `marketplace` environment can present. There is no
+> way to give it a friendlier name on that page.
+
 ## The development program
 
 The dev edition is a **private Marketplace listing**, so it is shared per organization. It exists for
