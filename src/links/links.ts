@@ -30,7 +30,7 @@ import { PermissionState, canAccessProjectSettings } from "../common/permissions
 import { LinkDraft, createLinkEditor } from "../common/link-editor";
 import { mergedRows, proposalFor, reconcile, slugTaken } from "../common/private-links";
 import { confirmDialog } from "../common/dialog";
-import { logError, logInfo } from "../common/log";
+import { describeError, logError, logInfo } from "../common/log";
 import { encodeQuery, withQueryParam } from "../common/urls";
 import { el, iconButton } from "../common/dom";
 import { ICON_DELETE, ICON_EDIT, ICON_SHARE, ICON_ADD } from "../common/icons";
@@ -163,14 +163,14 @@ SDK.ready()
       window.clearTimeout(guard);
       logError("Links initialization failed.", error);
       renderFatal(error);
-      SDK.notifyLoadFailed(error instanceof Error ? error.message : String(error));
+      SDK.notifyLoadFailed(describeError(error));
     }
   })
   .catch((error) => {
     settled = true;
     window.clearTimeout(guard);
     logError("SDK ready failed.", error);
-    SDK.notifyLoadFailed(String(error));
+    SDK.notifyLoadFailed(describeError(error));
   });
 
 /**
@@ -287,7 +287,7 @@ async function onSavePrivate(draft: LinkDraft): Promise<void> {
     }
     showList();
   } catch (error) {
-    notice = error instanceof Error ? error.message : String(error);
+    notice = describeError(error);
     logError("Unable to save the private link.", error);
     renderList(notice);
   }
@@ -313,7 +313,7 @@ async function deletePrivateLink(link: LinkEntry): Promise<void> {
     notice = "";
     renderList("");
   } catch (error) {
-    notice = error instanceof Error ? error.message : String(error);
+    notice = describeError(error);
     logError("Unable to delete the private link.", error);
     renderList(notice);
   }
@@ -353,7 +353,7 @@ async function sharePrivateLink(link: LinkEntry): Promise<void> {
     notice = `"${link.title}" was proposed to the project.`;
     renderList(notice);
   } catch (error) {
-    notice = error instanceof Error ? error.message : String(error);
+    notice = describeError(error);
     logError("Unable to propose the private link.", error);
     renderList(notice);
   }
@@ -604,6 +604,6 @@ function renderFatal(error: unknown): void {
   }
   root.innerHTML = "";
   root.appendChild(
-    el("div", "page error", "Error: " + (error instanceof Error ? error.message : String(error)))
+    el("div", "page error", "Error: " + (describeError(error)))
   );
 }

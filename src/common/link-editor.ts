@@ -24,7 +24,7 @@ import { fixedUrlError, isHttpUrl } from "./link-url";
 import { getBuildInfo, getBuildTimeline } from "./build-service";
 import { slugError as validateSlug } from "./validation";
 import { el, textField } from "./dom";
-import { logDebug } from "./log";
+import { describeError, logDebug } from "./log";
 
 /** What the editor edits. */
 export interface LinkDraft {
@@ -283,7 +283,7 @@ async function onBuilderChange(level: number, key: string): Promise<void> {
     } catch (error) {
       // A load failure (e.g. a missing permission) must not lose the form; show it in the box.
       children = [];
-      builderError = error instanceof Error ? error.message : String(error);
+      builderError = describeError(error);
       builderLevels[level + 1] = children;
       applyBuilder();
       return;
