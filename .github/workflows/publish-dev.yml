@@ -5,9 +5,9 @@ name: Publish dev
 # Rationale: the version is derived from git tags, then the published version is tagged. Both editions
 # share one tag sequence, so a `develop` merge publishes the next revision of the *released* minor
 # (0.1.0 -> 0.1.1 -> 0.1.2): a dev version reads as "the current release plus N merges", and a release
-# (`publish-stable`) publishes both editions at the same version. The `MARKETPLACE_PAT` secret holds a
-# Marketplace (Manage) token; sharing with tester organizations is a separate, explicit step
-# (`share-dev.yml`).
+# (`publish-stable`) publishes both editions at the same version. Publishing authenticates with the
+# `marketplace` environment's Microsoft Entra identity through GitHub OIDC (no stored secret); sharing
+# with tester organizations is a separate, explicit step (`share-dev.yml`).
 #
 # Visibility: GitHub evaluates `run-name` when the run is created and offers no API to rename a run
 # afterwards, so the computed version cannot appear in the run list. Instead this workflow writes a
@@ -98,31 +98,22 @@ jobs:
       # proven. 499b84ac-1321-427f-aa17-267ca6975798 is the well-known Azure DevOps / Visual Studio
       # resource id.
       - name: Sign in for the publishing token (OIDC, no secret)
-        if: vars.AZURE_CLIENT_ID != ''
         uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
       - name: Acquire the publishing token
-        env:
-          PAT: ${{ secrets.MARKETPLACE_PAT }}
         run: |
-          TOKEN=""
-          if [ -n "${{ vars.AZURE_CLIENT_ID }}" ]; then
-            TOKEN="$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv 2>/dev/null || true)"
-          fi
-          if [ -n "$TOKEN" ]; then
-            echo "::add-mask::$TOKEN"
-            echo "TFS_PAT=$TOKEN" >> "$GITHUB_ENV"
-            echo "Publishing with a **Microsoft Entra** token (OIDC, no secret)." >> "$GITHUB_STEP_SUMMARY"
-          elif [ -n "$PAT" ]; then
-            echo "TFS_PAT=$PAT" >> "$GITHUB_ENV"
-            echo "Publishing with the **PAT** secret (no usable OIDC identity)." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "No publishing token: neither an OIDC identity nor the PAT secret is available."
+          TOKEN="$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)"
+          if [ -z "$TOKEN" ]; then
+            echo "Could not obtain a Microsoft Entra token for the Marketplace (is the federated identity configured?)"
             exit 1
           fi
+          echo "::add-mask::$TOKEN"
+          echo "TFS_PAT=$TOKEN" >> "$GITHUB_ENV"
+          echo "Publishing with a **Microsoft Entra** token (OIDC, no secret)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Publishing with a Microsoft Entra token (OIDC, no secret)."
       - name: Publish dev extension
         run: npm run publish:dev
       - name: Tag the published version
