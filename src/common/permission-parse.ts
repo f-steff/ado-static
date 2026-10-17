@@ -25,12 +25,24 @@ export function readPermissionValue(payload: unknown): PermissionState {
   return null;
 }
 
-/** Finds the bit of a named action in a security-namespace definition (case-insensitive). */
+/**
+ * Finds the bit of a named action in a security-namespace definition (case-insensitive).
+ *
+ * Rationale for the unwrapping: the REST API returns the definition as `{ count, value: [ { ... } ] }`,
+ * while the bare object form is what the unit tests and older versions use. Looking only at the top
+ * level silently answered "unknown" for every probe (B10), which fail-safely left every
+ * permission-aware control visible.
+ */
 export function findActionBit(namespace: unknown, actionName: string): number | null {
   if (!namespace || typeof namespace !== "object") {
     return null;
   }
-  const actions = (namespace as { actions?: unknown }).actions;
+  const wrapper = namespace as { value?: unknown; actions?: unknown };
+  const definition = Array.isArray(wrapper.value) ? wrapper.value[0] : namespace;
+  if (!definition || typeof definition !== "object") {
+    return null;
+  }
+  const actions = (definition as { actions?: unknown }).actions;
   if (!Array.isArray(actions)) {
     return null;
   }
