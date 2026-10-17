@@ -15,7 +15,7 @@ name: Publish dev
 #
 # `paths-ignore`: a push whose every changed path is documentation, the CI/release scripts, tests, or
 # repository housekeeping cannot change the shipped extension, so it must not mint a version.
-# `overview.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored; neither is
+# `marketplace-advertisement.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored; neither is
 # `scripts/**`, because that tooling decides what goes into the package.
 on:
   push:

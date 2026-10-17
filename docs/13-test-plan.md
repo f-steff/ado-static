@@ -828,7 +828,7 @@ pipeline run (build ids in the evidence).
 | TC-16, TC-19 | OK | `?page=<slug>` renders the stored page: its headline and controls appear in the sandboxed child frame |
 | TC-21 | OK | `?page=no-such-page-xyz` -> "No page with the slug 'no-such-page-xyz' exists in this project." |
 | TC-29 | OK | `tsc` clean, 59/59 unit tests, lint 0 errors, `verify:clean` clean |
-| TC-53 | OK | Packaged VSIX: 8 PNGs, 0 SVGs, all three task folders, `overview.md` + `LICENSE` |
+| TC-53 | OK | Packaged VSIX: 8 PNGs, 0 SVGs, all three task folders, `marketplace-advertisement.md` + `LICENSE` |
 | TC-74 | OK (pipeline) | Build 4599: `extension: static` (not installed) failed with the edition-mismatch hint |
 | TC-77 | OK (pipeline) | Build 4601: no `extension` input -> `Using Static edition 'static-dev'.`, then published the page |
 | TC-76 | OK (pipeline) | Build 4605: backup wrote 38,410 bytes (1 project, 3 documents) and attached the artifact; the dry-run restore reported "would restore 1 project(s), 3 document(s); no writes were made" |
