@@ -100,6 +100,36 @@ Adding creates an ordinary project link from the frozen snapshot (attributed to 
 owner with a message. A proposal whose slug was taken since it was offered, or whose URL no longer has
 a valid shape, explains why and offers only **Reject**.
 
+#### Adding a link from any page (bookmarklet)
+
+Any Azure DevOps page can hand its own URL to this form. Open the settings page with
+`?url=<that page's URL>` and it lands on the **Links** tab with the URL already in the field and the
+cascading builder matched - for a build log URL the pipeline, build, view and stage/job/task target are
+selected too. Title, slug and comment are still yours to fill in.
+
+**Install it (released edition):** create a bookmark whose address is the following, then use it from
+any page in the project you want to add a link for.
+
+```js
+javascript:(()=>{const p=location.pathname.split('/').filter(Boolean);const org=/\.visualstudio\.com$/.test(location.host)?location.host.split('.')[0]:p.shift();const project=p.shift()||'';location.href='https://dev.azure.com/'+org+'/'+encodeURIComponent(project)+'/_settings/f-steff.static.static-admin-hub?url='+encodeURIComponent(location.href)})()
+```
+
+Drag the bookmark to the bookmarks bar - browsers strip `javascript:` when it is pasted into the
+address bar itself - and give it a name such as *Add to Static*.
+
+> **Development edition:** replace `f-steff.static` with `f-steff.static-dev` in the URL above.
+> Nothing else changes.
+
+The same URL can be built by anything, so a wiki page or a pipeline may offer *add this URL to Static*
+as an ordinary link:
+
+```
+https://dev.azure.com/{org}/{project}/_settings/{publisher}.{extension}.static-admin-hub?url={encoded url}
+```
+
+The parameter is only read from the address bar. It is never logged, never stored (unless the link is
+saved) and any value that is not an absolute `http(s)` URL is ignored.
+
 ### Pages tab
 
 Add/edit form (name, slug, comment) plus a summary line (`N page(s), total content size ...`), then

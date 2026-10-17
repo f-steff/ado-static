@@ -29,6 +29,19 @@ export function isHttpUrl(url: string): boolean {
 }
 
 /**
+ * The URL to pre-fill the link form with, or "" when the value is not usable.
+ *
+ * Rationale: the settings page accepts `?url=<page url>` so that a bookmarklet - or a plain link from a
+ * wiki or a pipeline - can hand it the page the user is looking at. Only absolute http(s) URLs are
+ * accepted, so a crafted query string cannot inject a `javascript:` or `data:` target into the form,
+ * and a length cap keeps a pathological value out of the address bar and the form.
+ */
+export function acceptablePrefillUrl(value: unknown): string {
+  const url = typeof value === "string" ? value.trim() : "";
+  return url.length > 0 && url.length <= 2000 && isHttpUrl(url) ? url : "";
+}
+
+/**
  * A short Area label for a stored link, matching the builder's area vocabulary
  * (Repo, PR, Pipeline, Artifact, Fixed). Derived from the URL so it is stable for old links; the
  * stored `area` wins when it is "fixed".

@@ -71,6 +71,7 @@ pure logic that previously had to be checked by hand:
 | AT-15 | Private links | slug reservation across project + own links; proposal snapshot; promotion fields; acceptance guard (taken slug, bad URL) | TC-85, TC-88 |
 | AT-16 | Proposal reconciliation | open keeps its marker, accepted removes the private original, rejected marks it, a missing record is forgotten, an orphaned proposal is withdrawn, other members' proposals are untouched | TC-87..TC-89 |
 | AT-17 | Merged Links list | project + private rows in one list, hidden project links omitted, `project`/`private`/`pending` statuses, alphabetical order, and matching on title/slug/comment (case-insensitive) | TC-91 |
+| AT-18 | Pre-fill guard | `acceptablePrefillUrl` accepts absolute http(s) URLs within the length cap, and ignores `javascript:`/`data:`/`file:`/non-strings/over-long values | TC-92 |
 
 ## Test cases
 
@@ -628,6 +629,17 @@ Create private links, propose one (and promote one), then download an organizati
 link) and `link-proposals` (proposals are project data). There is **no** `private-links` document, and
 a private link that was never promoted appears nowhere in the archive. Restoring that backup leaves
 every user's private links untouched.
+
+### TC-92  -  Add a link from any page  (FR-ADM-13)
+On any Azure DevOps page (a build's log view is a good one), run the bookmarklet from
+[docs/07](07-admin-experience.md#adding-a-link-from-any-page-bookmarklet), or open the settings page
+directly with `?url=<that page's URL>`.
+**Expected:** the project's Static settings page opens on the **Links** tab with the URL field filled
+and the cascading builder matched (a build log URL yields the pipeline/build/view and the
+stage/job/task target); the primary button enables once title and slug are filled. Opening the settings
+page without the parameter is unaffected, and a value that is not an absolute `http(s)` URL (for example
+`javascript:alert(1)`) is ignored rather than pre-filled.
+(Automated: `acceptablePrefillUrl`.)
 
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.

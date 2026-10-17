@@ -24,7 +24,7 @@ import { findActionBit, readPermissionValue } from "../src/common/permission-par
 import { buildViewSpecs, composePath, consumedParams, isFixedArea, targetMatches, viewKeyForValue } from "../src/common/builder-core";
 import { buildBundle, backupFileName, decodeBundle, encodeBundle, parseBundle } from "../src/common/backup";
 import { crc32, readZip, writeZip } from "../src/common/zip";
-import { fixedUrlError, isHttpUrl, linkAreaLabel } from "../src/common/link-url";
+import { acceptablePrefillUrl, fixedUrlError, isHttpUrl, linkAreaLabel } from "../src/common/link-url";
 import { isValidPullRequestId, pullRequestWebUrl } from "../src/common/pr-url";
 import { formatBytes, formatBytesWhole, formatRelativeTime } from "../src/common/format";
 import {
@@ -1076,4 +1076,25 @@ test("findActionBit unwraps the namespace definition the REST API returns", () =
     assert.equal(findActionBit({ count: 1, value: [null] }, "MANAGE_PROPERTIES"), null);
     assert.equal(findActionBit({ count: 1, value: [{ name: "Project" }] }, "MANAGE_PROPERTIES"), null);
     assert.equal(findActionBit({ count: 1, value: "nope" }, "MANAGE_PROPERTIES"), null);
+});
+
+// ---- Link form pre-fill from the address bar (bookmarklet) ---------------------------------
+
+test("acceptablePrefillUrl accepts only absolute http(s) URLs within the length cap", () => {
+    assert.equal(acceptablePrefillUrl("https://dev.azure.com/contoso/SampleProject/_build/results?buildId=1"), "https://dev.azure.com/contoso/SampleProject/_build/results?buildId=1");
+    assert.equal(acceptablePrefillUrl("  http://example.com/report  "), "http://example.com/report");
+    // Anything that is not a plain http(s) URL is ignored, so a crafted query cannot inject a target.
+    assert.equal(acceptablePrefillUrl("javascript:alert(1)"), "");
+    assert.equal(acceptablePrefillUrl("data:text/html,<script>alert(1)</script>"), "");
+    assert.equal(acceptablePrefillUrl("file:///c:/secret.txt"), "");
+    assert.equal(acceptablePrefillUrl("not a url"), "");
+    assert.equal(acceptablePrefillUrl(""), "");
+    assert.equal(acceptablePrefillUrl("   "), "");
+    // Defensive: the value arrives from a query string, so it may be a non-string.
+    assert.equal(acceptablePrefillUrl(undefined), "");
+    assert.equal(acceptablePrefillUrl(null), "");
+    assert.equal(acceptablePrefillUrl(["https://example.com"]), "");
+    assert.equal(acceptablePrefillUrl(42), "");
+    // A pathological length is refused rather than echoed into the form.
+    assert.equal(acceptablePrefillUrl("https://example.com/" + "a".repeat(2100)), "");
 });
