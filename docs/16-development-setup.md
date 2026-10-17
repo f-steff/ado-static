@@ -18,8 +18,8 @@ understand how the two editions are published.
   npm install -g tfx-cli
   ```
 
-- A **Marketplace token** for publishing, provided to the workflows as the secret
-  `MARKETPLACE_PAT` (see "Credentials" below). Building, testing and packaging need no token.
+- A **published identity** for releasing (see "Credentials" below) - only the publisher has one.
+  Building, testing and packaging need nothing.
 
 ## Build, test and run
 
@@ -71,9 +71,9 @@ than switching a setting.
 ## Publishing
 
 Publishing a version to the Marketplace is a **publisher** action: the commands and workflows below
-authenticate with the publisher's Marketplace token (`MARKETPLACE_PAT`), so a project member - or
-anyone outside the publisher - cannot publish one. A contribution reaches the Marketplace the same way
-it reaches `develop`: through CI and a pull request, with the publisher doing the release.
+authenticate as an identity that is a member of the publisher (see "Credentials"), so a project member
+- or anyone outside the publisher - cannot publish one. A contribution reaches the Marketplace the same
+way it reaches `develop`: through CI and a pull request, with the publisher doing the release.
 
 Merging is what publishes; there is no manual upload step in the normal flow.
 
@@ -98,9 +98,19 @@ commit; the workflows themselves are listed in [10-development.md](10-developmen
 
 ### Credentials
 
-Publishing authenticates with a Marketplace token (`MARKETPLACE_PAT`). Azure DevOps global PATs are
-retired on 2026-12-01, so publishing is slated to move to Microsoft Entra ID (GitHub OIDC) before
-then.
+Publishing authenticates with a **Microsoft Entra identity through GitHub OIDC** - no stored secret.
+
+- A **federated credential** on the identity trusts this repository's `marketplace` environment:
+  subject `repo:f-steff@7275320/ado-static@1415789222:environment:marketplace`, issuer
+  `https://token.actions.githubusercontent.com`, audience `api://AzureADTokenExchange`.
+- The identity is a **Contributor member of the publisher**, which is what allows it to publish; that
+  membership is added on the Marketplace publisher page by the publisher account.
+- Each publishing workflow runs in the `marketplace` environment, signs in with `azure/login` (the
+  client and tenant ids live in the environment's **variables**, not secrets) and asks for an **Azure
+  DevOps resource token** (`499b84ac-1321-427f-aa17-267ca6975798`), which `scripts/tfx.js` passes to tfx
+  as `--auth-type pat --token ...`.
+- There is **no personal access token** any more: `MARKETPLACE_PAT` was deleted, so the Azure DevOps
+  global PAT retirement (2026-12-01) does not touch publishing ([D30](08-open-questions.md)).
 
 ## The development program
 
