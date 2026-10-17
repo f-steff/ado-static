@@ -666,13 +666,29 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.2.16 / 0.2.17 (dev edition) - the bookmarklet becomes private, and its project is pinned
+
+Run on 2026-10-18 against the deployed `static-dev`, as the member identity
+(`fsteff@tegneserielogen.dk`).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| B12 | FAIL -> fixed | The bookmarklet opened the **project settings** page, so the form it pre-filled created a **project** link - not the private link a member expects from "add this page". Fixed in 0.2.16: `addLinkBookmarklet` targets the Links hub (`/_apps/hub/{publisher}.{extension}.static-links-hub?url=`) and `links.ts` opens the private-link editor pre-filled. The settings page keeps its own `?url=` receiver for project links (FR-ADM-13), so both forms stay available |
+| TC-92 (private form) | OK | On 0.2.16, from a real build page, the About link's own code opened `.../_apps/hub/f-steff.static-dev.static-links-hub?url=<encoded>` with the URL field `.../results?buildId=2&view=logs&j={{job}}`, the builder pre-selected **Pipeline** -> `static-demo` -> **Specific build...** -> `Build 2 (succeeded) [valid]` -> `Logs: Publish links [valid]`, and the primary button **Add private link**. The settings receiver still fills the project form (*Add link*) |
+| TC-92 (project resolution) | OK | On 0.2.17 the About href pins the project (`{o:"fsteff",p:"StaticTest"}`). From **example.com** (a fixed link) it lands in **StaticTest** with the URL `https://example.com/` and Area **Fixed (any URL)**; from a page in **StaticEmpty** it lands in **StaticEmpty**; from an organization page (`/fsteff/_projects`) it falls back to **StaticTest** |
+| TC-92 (guard) | OK | `?url=javascript:alert(1)` leaves the hub's editor closed and the settings page's URL field empty, so neither receiver pre-fills a non-http(s) value |
+
+The pinned project is what makes a fixed link work: its page is not on Azure DevOps, so there is no
+project to read from the URL. The text-only bookmarklet in docs/07 has no pinned project and does
+nothing on such a page.
+
 ### 0.2.13 - 0.2.15 (dev edition) - the About-tab bookmarklet, readable failures, and the end-to-end run
 
 Run on 2026-10-18 against the deployed `static-dev`.
 
 | Case | Result | Evidence |
 | --- | --- | --- |
-| TC-92 (About link) | OK | On 0.2.13 the About tab shows **Adding a link from any page** with the link *Add the page I am on to Static*, the tooltip "Right-click this link and choose 'Bookmark link' (or drag it to the bookmarks bar)." and a grab cursor. Its href carries the **installed** edition (`/_settings/f-steff.static-dev.static-admin-hub?url=`), and the package table agrees (`Publisher=f-steff`, `Extension id=static-dev`) |
+| TC-92 (About link) | OK | On 0.2.13 the About tab shows **Adding a link from any page** with the link *Add the page I am on to Static*, the tooltip "Right-click this link and choose 'Bookmark link' (or drag it to the bookmarks bar)." and a grab cursor. Its href carried the installed edition's settings page at the time (superseded in 0.2.16 - see B12 above; the link now targets the Links hub) |
 | B11 | FAIL -> fixed | The page and the host banner showed `[object Object]` when initialization failed. The account in use is not in the organization's directory, so the REST client rejected with `TFS.WebApi.Exception` - which has no `message`; the server's text sits in `responseText`, and `describeError` fell through to `String(error)`. Fixed in 0.2.14 and re-verified live: on 0.2.14 both the page and the banner read `TFS.WebApi.Exception: TF400813: The user is not authorized ... not a member of the AAD directory ...` |
 | TC-92 (end to end) | OK (0.2.15) | Signed in as the member identity (`fsteff@tegneserielogen.dk`) in an isolated session. The About link's own code, run from a real build page (`?buildId=2&view=logs&j=988476ee-...`), navigated to `.../_settings/f-steff.static-dev.static-admin-hub?url=<encoded page URL>`. The page opened on **Links** with the URL field `https://.../results?buildId=2&view=logs&j={{job}}` and the builder pre-selected **Pipeline** -> `static-demo` -> **Specific build...** -> `Build 2 (succeeded) - 2026-10-15 [valid]` -> `Logs: Publish links [valid]`, with the note "Detected a pipeline link; adjust any level below." The guard holds too: `?url=javascript:alert(1)` leaves the URL field empty and the builder at "(choose an area)" |
 
@@ -970,6 +986,8 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.2.13 | OK | OK | The **About** tab carries the add-to-Static bookmarklet as a right-clickable link built from the installed edition's ids; verified on the deployed page (dev id, tooltip, grab cursor). The end-to-end run from a build page completed on 0.2.15 |
 | 0.2.14 | OK | OK | **Readable failures**: `describeError` reports the server's message (`responseText`), name and HTTP status, so a directory mismatch reads TF400813 instead of `[object Object]` on the page and in the host banner (B11); tests 88/88 |
 | 0.2.15 | OK | OK | `overview.md` renamed to `marketplace-advertisement.md`, with the manifest `content.details.path` updated and the rename verified by packaging (the VSIX contains the new name); TC-92's end-to-end run passed on this build |
+| 0.2.16 | OK | OK | The bookmarklet now opens the **Links hub** and offers the page as a **private** link (FR-LINK-8); the settings page keeps its `?url=` receiver for project links (B12) |
+| 0.2.17 | OK | OK | The bookmarklet **pins the project** it came from, so a fixed link (an external page) still lands in the right project; a page in another project uses that project; organization pages fall back to the pinned one; tests 89/89 |
 | 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed
