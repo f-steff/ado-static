@@ -174,7 +174,7 @@ SDK.ready()
       settled = true;
       window.clearTimeout(loadGuard);
       logError("Admin initialization failed.", error);
-      errorText = error instanceof Error ? error.message : String(error);
+      errorText = describeError(error);
       render();
       SDK.notifyLoadFailed(errorText);
     }
@@ -184,7 +184,7 @@ SDK.ready()
     settled = true;
     window.clearTimeout(loadGuard);
     logError("SDK ready failed.", error);
-    SDK.notifyLoadFailed(error instanceof Error ? error.message : String(error));
+    SDK.notifyLoadFailed(describeError(error));
   });
 
 /** Loads the page and link indexes; auto-purges expired trash first. */

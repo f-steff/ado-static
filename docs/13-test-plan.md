@@ -73,6 +73,7 @@ pure logic that previously had to be checked by hand:
 | AT-17 | Merged Links list | project + private rows in one list, hidden project links omitted, `project`/`private`/`pending` statuses, alphabetical order, and matching on title/slug/comment (case-insensitive) | TC-91 |
 | AT-18 | Pre-fill guard | `acceptablePrefillUrl` accepts absolute http(s) URLs within the length cap, and ignores `javascript:`/`data:`/`file:`/non-strings/over-long values | TC-92 |
 | AT-19 | Bookmarklet builder | `addLinkBookmarklet` embeds the given edition's ids, handles dev.azure.com and {org}.visualstudio.com pages, does not double-encode an already-encoded project segment, and leaves the page alone outside a project | TC-92 |
+| AT-20 | Error reporting | `describeError` returns the Error message, a plain object's `message` with its name, the JSON body's message from `responseText`, the name plus HTTP status when there is no body, and a bounded fallback - never `[object Object]` | B11 |
 
 ## Test cases
 

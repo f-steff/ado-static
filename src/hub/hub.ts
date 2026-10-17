@@ -11,7 +11,7 @@ import { extensionVersion, HUB_PAGES, pagesHubUrl } from "../common/extension-ur
 import { formatBytes } from "../common/format";
 import { getHeading, iconFor } from "../common/branding";
 import { getHostNavigation, HostNavigationService } from "../common/host-nav";
-import { logError, logInfo, logWarn } from "../common/log";
+import { describeError, logError, logInfo, logWarn } from "../common/log";
 import { clearPageStore, readPageStore, writePageStore } from "../common/page-store";
 import { encodeQuery, withQueryParam } from "../common/urls";
 
@@ -198,14 +198,14 @@ SDK.ready()
       window.clearTimeout(loadGuard);
       logError("Initialization failed.", error);
       renderError(error);
-      SDK.notifyLoadFailed(error instanceof Error ? error.message : String(error));
+      SDK.notifyLoadFailed(describeError(error));
     }
   })
   .catch((error) => {
     settled = true;
     window.clearTimeout(loadGuard);
     logError("SDK ready failed.", error);
-    SDK.notifyLoadFailed(error instanceof Error ? error.message : String(error));
+    SDK.notifyLoadFailed(describeError(error));
   });
 
 /** Tiny element factory to keep the DOM code readable. */
@@ -376,7 +376,7 @@ function renderError(error: unknown): void {
   root.innerHTML = "";
   const container = el("div", "page error");
   container.textContent =
-    "Initialization error: " + (error instanceof Error ? error.message : String(error));
+    "Initialization error: " + (describeError(error));
   root.appendChild(container);
 }
 

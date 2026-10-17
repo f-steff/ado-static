@@ -1,3 +1,4 @@
+import { describeError } from "./log";
 import { getBuildTimeline, latestBuildId } from "./build-service";
 import {
   DYNAMIC_TOKEN,
@@ -63,7 +64,7 @@ export async function resolveDynamic(spec: DynamicSpec): Promise<ResolveResult> 
     }
     return { ok: true, value: String(id) };
   } catch (error) {
-    return fallbackOrError(spec, error instanceof Error ? error.message : String(error));
+    return fallbackOrError(spec, describeError(error));
   }
 }
 

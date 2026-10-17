@@ -25,6 +25,7 @@ import { buildViewSpecs, composePath, consumedParams, isFixedArea, targetMatches
 import { buildBundle, backupFileName, decodeBundle, encodeBundle, parseBundle } from "../src/common/backup";
 import { crc32, readZip, writeZip } from "../src/common/zip";
 import { acceptablePrefillUrl, addLinkBookmarklet, fixedUrlError, isHttpUrl, linkAreaLabel } from "../src/common/link-url";
+import { describeError } from "../src/common/log";
 import { isValidPullRequestId, pullRequestWebUrl } from "../src/common/pr-url";
 import { formatBytes, formatBytesWhole, formatRelativeTime } from "../src/common/format";
 import {
@@ -1144,4 +1145,25 @@ test("addLinkBookmarklet hands the current page URL to the project settings page
     // Outside a project (the organization home) there is nothing to add, so the page is left alone.
     const home = "https://dev.azure.com/contoso/";
     assert.equal(run(addLinkBookmarklet("f-steff", "static"), "/contoso/", "dev.azure.com", home), home);
+});
+
+// ---- Error reporting (B11) ------------------------------------------------------------------
+
+test("describeError turns non-Error rejections into something readable", () => {
+    assert.equal(describeError(new Error("plain failure")), "plain failure");
+    assert.equal(describeError("a string"), "a string");
+    // The Extension Data SDK's shape.
+    assert.equal(describeError({ name: "AccessCheckException", message: "denied" }), "AccessCheckException: denied");
+    // The REST client's TFS.WebApi.Exception: it has no `message`, only a JSON `responseText`.
+    assert.equal(
+        describeError({ name: "TFS.WebApi.Exception", status: 401, responseText: JSON.stringify({ message: "TF400813: no access" }) }),
+        "TFS.WebApi.Exception: TF400813: no access"
+    );
+    // Without a parsable body, the name and the status still beat "[object Object]".
+    assert.equal(describeError({ name: "TFS.WebApi.Exception", status: 401 }), "TFS.WebApi.Exception HTTP 401");
+    // A non-JSON body is surfaced as-is (bounded).
+    assert.equal(describeError({ responseText: "Bad gateway" }), "Bad gateway");
+    // Anything at all still prints.
+    assert.equal(describeError(42), "42");
+    assert.equal(describeError(null), "null");
 });
