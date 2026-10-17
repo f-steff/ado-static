@@ -36,6 +36,9 @@ The **About** tab of the settings pages carries a ready-made bookmarklet: right-
 **Links** hub opens with your **private** link form already filled in and the builder matched - for a
 build log URL down to the stage/job/task target. The link stays visible only to you until you share it.
 
+The link from a project's own settings also **pins that project**: a page outside Azure DevOps (a fixed
+link) is still added there, while a page in another project lands in that project.
+
 Anything that can build a URL can do the same, so a wiki page or a pipeline comment can offer *add this
 URL to Static* as an ordinary link:
 

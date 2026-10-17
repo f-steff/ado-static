@@ -31,6 +31,13 @@ export function buildAbout(): HTMLElement {
   const host = SDK.getHost();
   const publisherId = (context && context.publisherId) || "f-steff";
   const extensionId = (context && context.extensionId) || "static";
+  // The page knows its project, so the bookmarklet can pin it as the fallback for pages that are not
+  // inside a project (a fixed link, whose page is external). The organization settings page has no
+  // project, and there the link derives the project from the page it is clicked on instead.
+  const webContext = SDK.getWebContext();
+  const projectName = webContext && webContext.project ? webContext.project.name : "";
+  const bookmarkletTarget =
+    projectName && host && host.name ? { org: host.name, project: projectName } : undefined;
 
   const heading = (text: string) => wrap.appendChild(el("h3", undefined, text));
   const para = (text: string) => wrap.appendChild(el("p", undefined, text));
@@ -153,18 +160,25 @@ export function buildAbout(): HTMLElement {
   para(
     "You do not have to come to this page first. Bookmark the link below rather than clicking it: " +
       "right-click it and choose 'Bookmark link', or drag it to the bookmarks bar. Then click that " +
-      "bookmark on any page in a project and the Links hub opens with your private-link form already " +
-      "filled in and the builder matched - the link stays visible only to you until you share it. " +
-      "Title, slug and comment are still yours to fill in."
+      "bookmark on any page and the Links hub opens with your private-link form already filled in and " +
+      "the builder matched - the link stays visible only to you until you share it. Title, slug and " +
+      "comment are still yours to fill in."
   );
   const bookmarkletLine = wrap.appendChild(el("p"));
   const bookmarklet = el("a", "bookmarklet", "Add the page I am on to Static");
-  bookmarklet.setAttribute("href", addLinkBookmarklet(publisherId, extensionId));
+  bookmarklet.setAttribute("href", addLinkBookmarklet(publisherId, extensionId, bookmarkletTarget));
   bookmarklet.setAttribute(
     "title",
     "Right-click this link and choose 'Bookmark link' (or drag it to the bookmarks bar)."
   );
   bookmarkletLine.appendChild(bookmarklet);
+  para(
+    bookmarkletTarget
+      ? "It adds to the project of the page you click it on, and falls back to this project, so a page " +
+        "outside Azure DevOps (a fixed link) still lands in this project."
+      : "It adds to the project of the page you click it on. Open a project's own settings to get a " +
+        "bookmarklet that also works on pages outside Azure DevOps."
+  );
   para(
     "Anything that can build a URL can do the same. Opening the Links hub with ?url=<that page's URL> " +
       "offers the page as a private link; opening these settings with ?url=<that page's URL> offers it " +

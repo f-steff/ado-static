@@ -1114,7 +1114,7 @@ test("addLinkBookmarklet builds a self-contained bookmarklet for the installed e
     // Pinned so the code block in docs/07 cannot drift from what the extension generates.
     assert.equal(
         stable,
-        "javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const o=/\\.visualstudio\\.com$/.test(location.host)?location.host.split('.')[0]:s.shift();const p=s.shift()||'';if(!p)return;location.href='https://dev.azure.com/'+o+'/'+p+'/_apps/hub/f-steff.static.static-links-hub?url='+encodeURIComponent(location.href)})()"
+        "javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const a=/\\.visualstudio\\.com$/.test(location.host);const d=location.host==='dev.azure.com';const o=a?location.host.split('.')[0]:s[0];const p=a?s[0]:(d?s[1]:undefined);const t=p&&p[0]!=='_'?{o:o,p:p}:null;if(!t)return;location.href='https://dev.azure.com/'+t.o+'/'+t.p+'/_apps/hub/f-steff.static.static-links-hub?url='+encodeURIComponent(location.href)})()"
     );
 });
 
@@ -1146,6 +1146,38 @@ test("addLinkBookmarklet hands the current page URL to the Links hub", () => {
     // Outside a project (the organization home) there is nothing to add, so the page is left alone.
     const home = "https://dev.azure.com/contoso/";
     assert.equal(run(addLinkBookmarklet("f-steff", "static"), "/contoso/", "dev.azure.com", home), home);
+    // Without a pinned project, an external page has no project either, so it is left alone too.
+    const external = "https://example.com/report";
+    assert.equal(run(addLinkBookmarklet("f-steff", "static"), "/report", "example.com", external), external);
+    // An organization page ('_' segment) is not a project, so it must not be mistaken for one.
+    const orgPage = "https://dev.azure.com/contoso/_settings";
+    assert.equal(run(addLinkBookmarklet("f-steff", "static"), "/contoso/_settings", "dev.azure.com", orgPage), orgPage);
+});
+
+test("addLinkBookmarklet pins a fallback project so a fixed link lands in the right project", () => {
+    const href = addLinkBookmarklet("f-steff", "static", { org: "contoso", project: "SampleProject" });
+    // The pinned ids are embedded, encoded once.
+    assert.ok(href.includes('{o:"contoso",p:"SampleProject"}'));
+    const run = (pathname: string, host: string, current: string) => {
+        const fake = { pathname, host, href: current };
+        new Function("location", href.slice("javascript:".length))(fake);
+        return fake.href;
+    };
+    const hub = "https://dev.azure.com/contoso/SampleProject/_apps/hub/f-steff.static.static-links-hub?url=";
+    // A fixed link: the page is external and has no project, so the pinned project is used.
+    const external = "https://example.com/reports/coverage.html";
+    assert.equal(run("/reports/coverage.html", "example.com", external), hub + encodeURIComponent(external));
+    // A page inside another project keeps that project.
+    const other = "https://dev.azure.com/contoso/OtherProject/_build/results";
+    assert.equal(
+        run("/contoso/OtherProject/_build/results", "dev.azure.com", other),
+        "https://dev.azure.com/contoso/OtherProject/_apps/hub/f-steff.static.static-links-hub?url=" + encodeURIComponent(other)
+    );
+    // An organization page ('_' segment) is not a project, so the pinned one is used.
+    const orgPage = "https://dev.azure.com/contoso/_settings";
+    assert.equal(run("/contoso/_settings", "dev.azure.com", orgPage), hub + encodeURIComponent(orgPage));
+    // A project name with a space is encoded once (a space becomes %20, not %2520).
+    assert.ok(addLinkBookmarklet("f-steff", "static", { org: "contoso", project: "My Project" }).includes('{o:"contoso",p:"My%20Project"}'));
 });
 
 // ---- Error reporting (B11) ------------------------------------------------------------------
