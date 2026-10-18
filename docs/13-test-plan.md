@@ -633,10 +633,12 @@ a private link that was never promoted appears nowhere in the archive. Restoring
 every user's private links untouched.
 
 ### TC-92  -  Add a private link from any page  (FR-LINK-8, FR-ADM-13)
-Open Project settings -> **About** and check the bookmarklet link: it must carry the installed
-edition's id (`f-steff.static.static-links-hub` released, `f-steff.static-dev.static-links-hub`
-development), and right-clicking it must offer *Bookmark link* (dragging it to the bookmarks bar does
-the same). Then, on any Azure DevOps page (a build's log view is a good one), click that bookmark.
+Open the **Links** hub and press the **info** button beside the subtitle. A dialog must open with the
+explanation and the **Add to Static** link; right-clicking the link must offer *Bookmark link* (dragging
+it to the bookmarks bar does the same), and a click on the dimmed backdrop or Escape must close the
+dialog. The link must carry the installed edition's id (`f-steff.static.static-links-hub` released,
+`f-steff.static-dev.static-links-hub` development) and pin this project. Then click that bookmark on any
+Azure DevOps page (a build's log view is a good one).
 **Expected:** the **Links hub** opens with the **private-link** form shown, its URL field filled and the
 cascading builder matched (a build log URL yields the pipeline/build/view and the stage/job/task
 target); the primary button reads *Add private link*, and saving keeps the link in the user's own scope

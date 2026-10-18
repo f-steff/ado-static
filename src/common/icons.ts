@@ -22,3 +22,9 @@ export const ICON_SHARE =
 export const ICON_ADD =
   '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">' +
   '<path fill="currentColor" d="M7 2h2v5h5v2H9v5H7V9H2V7h5V2z"/></svg>';
+
+/** Circled i: opens the explanation of the bookmarklet. */
+export const ICON_INFO =
+  '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
+  '<circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+  '<path fill="currentColor" d="M7.2 6.6h1.6v5H7.2zM7.2 4.2h1.6v1.5H7.2z"/></svg>';

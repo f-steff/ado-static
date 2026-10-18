@@ -37,3 +37,30 @@
     justify-content: flex-end;
     gap: 8px;
 }
+
+/* Informational dialog (the hub's bookmarklet instructions): a title, a block of steps and a link. */
+.dialog-info {
+    max-width: 520px;
+}
+
+.dialog-title {
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.dialog-body p {
+    margin: 0 0 10px;
+    line-height: 1.45;
+}
+
+/* The draggable bookmarklet link: it must read as something to grab, not as an ordinary link. */
+.dialog-body a.bookmarklet {
+    display: inline-block;
+    padding: 6px 12px;
+    border: 1px dashed rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 4px;
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    font-weight: 600;
+    cursor: grab;
+}

@@ -102,20 +102,18 @@ a valid shape, explains why and offers only **Reject**.
 
 #### Adding a private link from any page (bookmarklet)
 
-Any Azure DevOps page can hand its own URL to the **Links** hub: open it with `?url=<that page's URL>`
-and the **private-link form** opens with the URL already in the field and the cascading builder matched
-- for a build log URL the pipeline, build, view and stage/job/task target are selected too. Title, slug
-and comment are still yours to fill in, and the link is **yours**: it stays visible only to you until
-you share it with the project.
+The **Links** hub has an **info** button (a circled i) beside its subtitle. It opens a dialog that
+explains the idea and offers the **Add to Static** link: drag that link to the bookmarks bar, or
+right-click it and choose *Bookmark link*, then click that bookmark on any Azure DevOps page. A click on
+the dimmed backdrop, or Escape, closes the dialog without doing anything.
 
-**Install it:** the **About** tab carries the bookmarklet as a link. Right-click it and choose
-*Bookmark link* (or drag it to the bookmarks bar), then click that bookmark on any page in a project.
-The link is built from the installed edition's ids, so it is already correct for the edition you are
-running - there is nothing to edit.
+Clicking the bookmark opens the hub with `?url=<that page's URL>`, which shows the **private-link form**
+with the URL already in the field and the cascading builder matched - for a build log URL the pipeline,
+build, view and stage/job/task target are selected too. Title, slug and comment are still yours to fill
+in, and the link is **yours**: it stays visible only to you until you share it with the project.
 
-The link the **About** tab offers also pins the project it came from. It uses the project of the page
-you click it on, and falls back to that pinned project - so a page **outside Azure DevOps** (a fixed
-link) still lands in the right project, and a page in another project lands in **that** project.
+The link the dialog offers is built for the project it came from **and pins it**: a page outside Azure
+DevOps (a fixed link) still lands there, while a page in another project lands in **that** project.
 
 **The same bookmarklet as text** (released edition, for a project you pick each time), for a browser
 that will not let you bookmark the link directly:
@@ -125,8 +123,8 @@ javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const a=/\
 ```
 
 That form has no pinned project: it uses the project of the page you click it on and does nothing
-outside Azure DevOps, so get the link from the target project's own **About** tab when you need a
-bookmarklet that also works on an external page.
+outside Azure DevOps, so take the link from the target project's own **Links** hub (the info button)
+when you need a bookmarklet that also works on an external page.
 
 Create a bookmark and paste the code into its address field (browsers strip `javascript:` when it is
 pasted into the address bar itself), and give it a name such as *Add to Static*.

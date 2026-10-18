@@ -22,18 +22,18 @@ import {
   updatePrivateLink
 } from "../common/data-service";
 import { getHeading, iconFor } from "../common/branding";
-import { acceptablePrefillUrl, linkAreaLabel } from "../common/link-url";
+import { acceptablePrefillUrl, addLinkBookmarklet, linkAreaLabel } from "../common/link-url";
 import { resolveLink } from "../common/dynamic-resolve";
 import { HUB_LINKS, pagesHubUrl } from "../common/extension-urls";
 import { getHostNavigation, HostNavigationService } from "../common/host-nav";
 import { PermissionState, canAccessProjectSettings } from "../common/permissions";
 import { LinkDraft, createLinkEditor } from "../common/link-editor";
 import { mergedRows, proposalFor, reconcile, slugTaken } from "../common/private-links";
-import { confirmDialog } from "../common/dialog";
+import { confirmDialog, infoDialog } from "../common/dialog";
 import { describeError, logError, logInfo } from "../common/log";
 import { encodeQuery, withQueryParam } from "../common/urls";
 import { el, iconButton } from "../common/dom";
-import { ICON_DELETE, ICON_EDIT, ICON_SHARE, ICON_ADD } from "../common/icons";
+import { ICON_DELETE, ICON_EDIT, ICON_SHARE, ICON_ADD, ICON_INFO } from "../common/icons";
 
 /**
  * Links hub.
@@ -286,6 +286,81 @@ function showEditor(link?: LinkEntry): void {
   renderList("");
 }
 
+/**
+ * Builds the info button beside the hub's subtitle.
+ *
+ * Rationale: "bookmarklet" is jargon, and the button is as much an explanation as an action, so it is
+ * the familiar circled-i: pressing it opens the dialog that explains the idea and hands out the link.
+ */
+function bookmarkletInfoButton(): HTMLButtonElement {
+  return iconButton({
+    icon: ICON_INFO,
+    label: "How to save any page as a private link",
+    onClick: () => {
+      void showBookmarkletDialog();
+    }
+  });
+}
+
+/**
+ * Explains the bookmarklet and hands out a link built for this project.
+ *
+ * Rationale: members manage their own links here, and most cannot open the settings page (which used
+ * to be the only place that offered the link). The generated link pins this project, so a click on an
+ * external page - a fixed link - still lands here, while a page in another project lands there.
+ */
+async function showBookmarkletDialog(): Promise<void> {
+  const context = SDK.getExtensionContext();
+  const host = SDK.getHost();
+  const webContext = SDK.getWebContext();
+  const publisherId = (context && context.publisherId) || "f-steff";
+  const extensionId = (context && context.extensionId) || "static";
+  const org = host && host.name ? host.name : "";
+  const project = webContext && webContext.project ? webContext.project.name : "";
+  const target = org && project ? { org, project } : undefined;
+  const href = addLinkBookmarklet(publisherId, extensionId, target);
+
+  await infoDialog("Save any page as a private link", (body) => {
+    body.appendChild(
+      el(
+        "p",
+        undefined,
+        "A link can point at a page you are looking at - a build log, a dashboard, an external report - " +
+          "without leaving this hub first. The bookmarklet below does that in one click, and saves the " +
+          "link as one of your own: nobody else sees it until you share it."
+      )
+    );
+    body.appendChild(el("p", undefined, "Bookmark the link, then click that bookmark on any page:"));
+    const line = el("p");
+    const link = el("a", "bookmarklet", "Add to Static");
+    link.setAttribute("href", href);
+    link.setAttribute(
+      "title",
+      "Drag this to the bookmarks bar, or right-click it and choose 'Bookmark link'."
+    );
+    // A click inside the dialog would only run the bookmarklet on this page; it has to be a bookmark.
+    link.addEventListener("click", (event) => event.preventDefault());
+    line.appendChild(link);
+    body.appendChild(line);
+    body.appendChild(
+      el(
+        "p",
+        undefined,
+        "Drag it to the bookmarks bar, or right-click it and choose 'Bookmark link'. Clicking it here does nothing."
+      )
+    );
+    body.appendChild(
+      el(
+        "p",
+        undefined,
+        "The link is pinned to this project: a page outside Azure DevOps still lands here, and a page in " +
+          "another project lands there. The form arrives pre-filled and the builder matched, so only the " +
+          "title, slug and comment are left."
+      )
+    );
+  });
+}
+
 /** Saves the private link being edited (create or update). */
 async function onSavePrivate(draft: LinkDraft): Promise<void> {
   try {
@@ -391,7 +466,12 @@ function renderList(message: string, loading = false): void {
 
   const page = el("div", "page");
   page.appendChild(getHeading("h1", "Static links", iconFor("links")));
-  page.appendChild(el("p", "subtitle", "Bookmarkable links into this project."));
+  // The subtitle row carries the Bookmarklet button on the right. Members cannot open the settings
+  // page, so this hub is where they pick up the link that saves a page as their own private link.
+  const headerRow = el("div", "hub-header-row");
+  headerRow.appendChild(el("p", "subtitle", "Bookmarkable links into this project."));
+  headerRow.appendChild(bookmarkletInfoButton());
+  page.appendChild(headerRow);
   if (notice && view === "list") {
     page.appendChild(el("p", "notice", notice));
   }
