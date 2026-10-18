@@ -679,6 +679,21 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.2.18 / 0.2.19 (dev edition) - the hub's info dialog and the pending-proposal pill
+
+Run on 2026-10-18 against the deployed `static-dev`, as the member identity
+(`fsteff@tegneserielogen.dk`).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-92 (info dialog) | OK | The Links hub shows the circled-i on the subtitle row; it opens *Save any page as a private link* with the **Add to Static** link (href 453 chars, pinned to `fsteff/StaticTest`), and a click on the dimmed backdrop closes it. Escape closes it as well. The explanation text is present, and the About tabs no longer carry the bookmarklet |
+| TC-93 (negative) | OK | With the real probe this member has no project-settings right (`MANAGE_PROPERTIES` false - the empty project's hub says "Ask a project administrator"), so no pill is shown |
+| TC-93 (positive) | OK (stubbed probe) | With only the permissions response stubbed to `{"value":[true]}` (no data or ACL change), the hub shows the red pill **1 pending** immediately before the info button (`rgb(164, 38, 44)`) with the tooltip "1 pending in Project settings -> Static -> Links: ..."; clicking it opens the settings page on **Links** with **Proposed links (1)** and `Alpha report` |
+
+One observation for D27: for this member ADO renders the proposal's **Add to project** and **Reject**
+buttons enabled, although the `MANAGE_PROPERTIES` probe says no. The pill follows the probe, which is
+the model D27 defines; if members should see it whenever ADO lets them act, the gate has to change.
+
 ### 0.2.16 / 0.2.17 (dev edition) - the bookmarklet becomes private, and its project is pinned
 
 Run on 2026-10-18 against the deployed `static-dev`, as the member identity
@@ -1001,6 +1016,8 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.2.15 | OK | OK | `overview.md` renamed to `marketplace-advertisement.md`, with the manifest `content.details.path` updated and the rename verified by packaging (the VSIX contains the new name); TC-92's end-to-end run passed on this build |
 | 0.2.16 | OK | OK | The bookmarklet now opens the **Links hub** and offers the page as a **private** link (FR-LINK-8); the settings page keeps its `?url=` receiver for project links (B12) |
 | 0.2.17 | OK | OK | The bookmarklet **pins the project** it came from, so a fixed link (an external page) still lands in the right project; a page in another project uses that project; organization pages fall back to the pinned one; tests 89/89 |
+| 0.2.18 | OK | OK | The Links hub has an **info** button that explains the bookmarklet in a dialog (outside click or Escape closes) and the About tabs no longer carry it; tests 89/89 |
+| 0.2.19 | OK | OK | The hub shows a red **pending-proposal** pill with the project-wide count to callers who can manage the project settings, linking to the proposals (FR-LINK-9); tests 90/90 |
 | 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed
