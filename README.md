@@ -41,10 +41,6 @@ link stays visible only to you until you share it.
 The bookmarklet is pinned to the project it was created in, so a page outside Azure DevOps (a fixed
 link) still lands there, while a page in another project lands in that project.
 
-Project administrators can still create a link for everybody: opening
-`.../_settings/{publisher}.{extension}.static-admin-hub?url=<page url>` fills the settings page's
-project-link form instead.
-
 ## What you can publish from a pipeline
 
 - **A page** - `PublishPage@0` turns a self-contained HTML file into a permanent page with a stable
