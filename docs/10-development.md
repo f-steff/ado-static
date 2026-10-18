@@ -119,6 +119,8 @@ ado-static/
 
   One line per pull request, newest first. Squashing a release to flatten that list would put the tag on
   a synthetic commit, leave `develop`'s commits outside `main`, and make the next release replay them.
+- That overview is for `main` **only**. `develop` is rebase-merged, so its history is flat and lists
+  every commit - nothing is hidden there, and that is intended.
 - The ruleset *Protect main and develop* requires a pull request, the status checks, no deletion and no
   force-push - but **not** linear history. That last rule was removed deliberately: it forced GitHub's
   rebase-merge, which rewrites the committer, so **every SHA changes** and `main` became a *parallel

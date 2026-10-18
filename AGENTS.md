@@ -70,7 +70,8 @@ Before finishing any change, scan for accidental instance identifiers.
   forks the history (see [`docs/10-development.md`](docs/10-development.md#branching-and-releases)).
   `main` therefore contains every `develop` commit by design; the **release overview** is the
   first-parent chain, `git log --first-parent --merges --oneline main` (one line per pull request), and
-  that is the view to use - do not squash releases to flatten the list.
+  that is the view to use - do not squash releases to flatten the list. This applies to `main` **only**:
+  `develop` is rebase-merged and keeps every commit, which is the flat history wanted there.
 - **Pipelines**: only `.github/workflows/`. Reusable helper scripts live in `ci/`.
 - **Versions**: both editions share one tag sequence - a release publishes *both* at the same version,
   and a `develop` merge publishes the next revision of the released minor. See
