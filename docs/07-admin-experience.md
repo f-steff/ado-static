@@ -115,6 +115,16 @@ in, and the link is **yours**: it stays visible only to you until you share it w
 The link the dialog offers is built for the project it came from **and pins it**: a page outside Azure
 DevOps (a fixed link) still lands there, while a page in another project lands in **that** project.
 
+#### Pending proposals in the hub
+
+When a project has proposed links - links members shared from their own private list - and the caller
+can open the project settings page, the hub shows a red pill next to the info button with the count
+(for example *1 pending*). It counts **every** proposal in the project, not only the caller's own, and
+it opens Project settings -> Static -> Links, where each proposal can be accepted or rejected.
+
+The pill is permission-aware: a caller who provably cannot open the settings page does not see it, and
+an unknown permission keeps it visible (D27). It disappears when no proposal is left.
+
 **The same bookmarklet as text** (released edition, for a project you pick each time), for a browser
 that will not let you bookmark the link directly:
 

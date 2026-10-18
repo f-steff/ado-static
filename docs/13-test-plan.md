@@ -74,6 +74,7 @@ pure logic that previously had to be checked by hand:
 | AT-18 | Pre-fill guard | `acceptablePrefillUrl` accepts absolute http(s) URLs within the length cap, and ignores `javascript:`/`data:`/`file:`/non-strings/over-long values | TC-92 |
 | AT-19 | Bookmarklet builder | `addLinkBookmarklet` targets the **Links hub** (the private-link form, never the settings page), embeds the given edition's ids, prefers the project of the current page and otherwise uses the pinned project (so a fixed link works), only derives a project on Azure DevOps hosts, does not double-encode an already-encoded segment, and leaves unrelated pages alone | TC-92 |
 | AT-20 | Error reporting | `describeError` returns the Error message, a plain object's `message` with its name, the JSON body's message from `responseText`, the name plus HTTP status when there is no body, and a bounded fallback - never `[object Object]` | B11 |
+| AT-21 | Pending label | `pendingLabel` renders "1 pending" and "N pending" | TC-93 |
 
 ## Test cases
 
@@ -649,6 +650,16 @@ instead fills the **project**-link form (FR-ADM-13). A value that is not an abso
 example `javascript:alert(1)`) is ignored in both, and the text-only bookmarklet (no pinned project)
 does nothing on a page that names no project.
 (Automated: `acceptablePrefillUrl`, `addLinkBookmarklet`.)
+
+### TC-93  -  Pending-proposal indicator in the hub  (FR-LINK-9)
+In a project with at least one proposed link (the test project has one), open the **Links** hub as a
+caller who can open the project settings page, then as a caller who cannot.
+**Expected:** the caller who can act sees a red pill with a warning icon and the count (for example
+*1 pending*) beside the info button; clicking it opens Project settings -> Static -> Links, where the
+proposal can be accepted or rejected. The caller without settings access sees no pill. The count covers
+every proposal in the project, not only the caller's own, and it disappears once the last proposal is
+decided (reload the hub to see that).
+(Automated: `pendingLabel`.)
 
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.

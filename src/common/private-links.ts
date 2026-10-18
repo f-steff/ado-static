@@ -262,3 +262,12 @@ export function mergedRows(
         a.link.slug.localeCompare(b.link.slug)
     );
 }
+
+/**
+ * Text of the hub's pending-proposal indicator.
+ * Rationale: the count is the actionable part ("3 pending"), so it stays in one place and reads the
+ * same wherever the hub shows it.
+ */
+export function pendingLabel(count: number): string {
+  return count === 1 ? "1 pending" : `${count} pending`;
+}
