@@ -68,6 +68,9 @@ Before finishing any change, scan for accidental instance identifiers.
   `develop` into `main` with a merge commit, so `main` contains every commit `develop` has and the
   release tag lands on that merge commit. Do **not** rebase-merge a release: it rewrites every SHA and
   forks the history (see [`docs/10-development.md`](docs/10-development.md#branching-and-releases)).
+  The release merge commit keeps the **default one-line subject** (`Merge pull request #N from
+  f-steff/develop`) and **no body**, so the commit overview on `main` stays readable: pass
+  `--subject "Merge pull request #N from f-steff/develop" --body ""` to `gh pr merge --merge`.
 - **Pipelines**: only `.github/workflows/`. Reusable helper scripts live in `ci/`.
 - **Versions**: both editions share one tag sequence - a release publishes *both* at the same version,
   and a `develop` merge publishes the next revision of the released minor. See
