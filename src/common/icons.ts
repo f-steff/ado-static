@@ -28,3 +28,9 @@ export const ICON_INFO =
   '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
   '<circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
   '<path fill="currentColor" d="M7.2 6.6h1.6v5H7.2zM7.2 4.2h1.6v1.5H7.2z"/></svg>';
+
+/** Circled exclamation: a proposed link is waiting for a decision. */
+export const ICON_WARNING =
+  '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">' +
+  '<circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+  '<path fill="currentColor" d="M7.25 4.3h1.5v4.8h-1.5zM7.25 10.3h1.5v1.5h-1.5z"/></svg>';

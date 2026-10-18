@@ -27,7 +27,8 @@ every project, and each project starts with an empty list.
 
 Members can keep **private links** of their own in the Links hub - visible only to them - and offer one
 to the project with **Share**, which adds it to the project settings as a proposed link for whoever
-manages those settings to accept or reject.
+manages those settings to accept or reject. That person sees a red pending count in the hub that leads
+straight to the proposals.
 
 ## Add a private link from the page you are on
 

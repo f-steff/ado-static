@@ -24,16 +24,16 @@ import {
 import { getHeading, iconFor } from "../common/branding";
 import { acceptablePrefillUrl, addLinkBookmarklet, linkAreaLabel } from "../common/link-url";
 import { resolveLink } from "../common/dynamic-resolve";
-import { HUB_LINKS, pagesHubUrl } from "../common/extension-urls";
+import { HUB_LINKS, currentProjectSettingsUrl, pagesHubUrl } from "../common/extension-urls";
 import { getHostNavigation, HostNavigationService } from "../common/host-nav";
 import { PermissionState, canAccessProjectSettings } from "../common/permissions";
 import { LinkDraft, createLinkEditor } from "../common/link-editor";
-import { mergedRows, proposalFor, reconcile, slugTaken } from "../common/private-links";
+import { mergedRows, pendingLabel, proposalFor, reconcile, slugTaken } from "../common/private-links";
 import { confirmDialog, infoDialog } from "../common/dialog";
 import { describeError, logError, logInfo } from "../common/log";
 import { encodeQuery, withQueryParam } from "../common/urls";
 import { el, iconButton } from "../common/dom";
-import { ICON_DELETE, ICON_EDIT, ICON_SHARE, ICON_ADD, ICON_INFO } from "../common/icons";
+import { ICON_DELETE, ICON_EDIT, ICON_SHARE, ICON_ADD, ICON_INFO, ICON_WARNING } from "../common/icons";
 
 /**
  * Links hub.
@@ -287,6 +287,36 @@ function showEditor(link?: LinkEntry): void {
 }
 
 /**
+ * Builds the red pending-proposal pill, or null when there is nothing to review.
+ *
+ * Rationale: the count is **every** proposed link in this project - whoever offered it - because the
+ * caller can accept or reject any of them from the settings page. The pill appears only when the
+ * caller can open that page. The probe answers false only when it could be evaluated; an unknown answer
+ * stays visible (D27), because hiding an action from someone who *can* act is the worse failure.
+ */
+function pendingIndicator(): HTMLButtonElement | null {
+  const count = (proposals.proposals || []).length;
+  if (count === 0 || canOpenProjectSettings === false) {
+    return null;
+  }
+  const label = pendingLabel(count);
+  const button = el("button", "pending-indicator");
+  button.type = "button";
+  button.title =
+    `${label} in Project settings -> Static -> Links: open it to add the proposed link to the project.`;
+  button.setAttribute("aria-label", button.title);
+  const icon = el("span", "pending-indicator-icon");
+  // Shipped markup, never user content, so assigning it as HTML is safe here.
+  icon.innerHTML = ICON_WARNING;
+  button.appendChild(icon);
+  button.appendChild(el("span", undefined, label));
+  button.addEventListener("click", () => {
+    nav.navigate(currentProjectSettingsUrl());
+  });
+  return button;
+}
+
+/**
  * Builds the info button beside the hub's subtitle.
  *
  * Rationale: "bookmarklet" is jargon, and the button is as much an explanation as an action, so it is
@@ -470,7 +500,15 @@ function renderList(message: string, loading = false): void {
   // page, so this hub is where they pick up the link that saves a page as their own private link.
   const headerRow = el("div", "hub-header-row");
   headerRow.appendChild(el("p", "subtitle", "Bookmarkable links into this project."));
-  headerRow.appendChild(bookmarkletInfoButton());
+  // The controls sit together on the right: the pending-proposal pill (only for someone who can act
+  // on it) and the info button that hands out the bookmarklet.
+  const headerControls = el("div", "hub-header-controls");
+  const pending = pendingIndicator();
+  if (pending) {
+    headerControls.appendChild(pending);
+  }
+  headerControls.appendChild(bookmarkletInfoButton());
+  headerRow.appendChild(headerControls);
   page.appendChild(headerRow);
   if (notice && view === "list") {
     page.appendChild(el("p", "notice", notice));

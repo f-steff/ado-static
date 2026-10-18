@@ -49,7 +49,7 @@ import {
     withQueryParam
 } from "../src/common/urls";
 import { featureStateUrl, slugError, slugify } from "../src/common/validation";
-import { byOrderThenTitle, acceptanceError, mergedRows, proposalFor, promotionFields, reconcile, slugTaken } from "../src/common/private-links";
+import { byOrderThenTitle, acceptanceError, mergedRows, pendingLabel, proposalFor, promotionFields, reconcile, slugTaken } from "../src/common/private-links";
 import type { LinkEntry, LinkIndex, LinkProposal, PageIndex, PageMetadata, TrashEntry } from "../src/common/data-service";
 
 /** Builds a page with sensible defaults so tests can override only what they assert. */
@@ -1181,6 +1181,12 @@ test("addLinkBookmarklet pins a fallback project so a fixed link lands in the ri
 });
 
 // ---- Error reporting (B11) ------------------------------------------------------------------
+
+test("pendingLabel reports the number of proposals waiting for a decision", () => {
+    assert.equal(pendingLabel(1), "1 pending");
+    assert.equal(pendingLabel(2), "2 pending");
+    assert.equal(pendingLabel(0), "0 pending");
+});
 
 test("describeError turns non-Error rejections into something readable", () => {
     assert.equal(describeError(new Error("plain failure")), "plain failure");

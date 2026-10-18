@@ -71,6 +71,12 @@ export function pagesProjectSettingsUrl(project: string): string {
   });
 }
 
+/** URL of the current project's Static settings page (where proposed links are accepted). */
+export function currentProjectSettingsUrl(): string {
+  const web = SDK.getWebContext();
+  return pagesProjectSettingsUrl(web && web.project ? web.project.name : "");
+}
+
 /** URL of the organization's Pages settings page (for the project settings back-link). */
 export function pagesOrgSettingsUrl(): string {
   const c = context();

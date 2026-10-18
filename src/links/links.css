@@ -60,6 +60,36 @@ h1 {
     margin: 0;
 }
 
+/* Right-hand side of the subtitle row: the pending pill and the info button. */
+.hub-header-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Pending-proposal pill: shown only to a caller who can act on the proposal, so it reads as a call to
+   action rather than a status badge for everybody. */
+.pending-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 10px;
+    border: 1px solid #d13438;
+    border-radius: 12px;
+    background: #fde7e9;
+    color: #a4262c;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.pending-indicator:hover {
+    background: #f3c8cc;
+}
+
+.pending-indicator-icon {
+    display: inline-flex;
+}
+
 table.data-table {
     width: 100%;
     border-collapse: collapse;
