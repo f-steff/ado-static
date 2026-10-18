@@ -679,6 +679,22 @@ is installed - verified with build 4595 in such an organization.)
 
 ## Results log
 
+### 0.3.0 (release) - the first `main` release published with OIDC
+
+Released on 2026-10-18 by merging `develop` into `main` (PR #75, merge commit) - the first release from
+this line since 0.2.0, and the first whose stable publish authenticates with the Entra identity.
+
+| Step | Result |
+| --- | --- |
+| Compute version | `version=0.3.0`, `tag=v0.3.0`; the tag is pushed before the dev publish, so the sequence advances once |
+| Sign in / acquire the token | `Sign in for the publishing token (OIDC, no secret)` and `Acquire the publishing token` succeed; the log prints **"Publishing with a Microsoft Entra token (OIDC, no secret)."** and no PAT exists |
+| Publish stable | success |
+| Tag the version | success (`v0.3.0`) |
+| Publish dev at the same version | success - both editions are 0.3.0 |
+| Record the version | success: a commit status reads "Published Static 0.3.0" on the merge commit |
+
+`main` now carries the OIDC workflows, so every later release publishes the same way.
+
 ### 0.2.18 / 0.2.19 (dev edition) - the hub's info dialog and the pending-proposal pill
 
 Run on 2026-10-18 against the deployed `static-dev`, as the member identity
@@ -1018,6 +1034,7 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.2.17 | OK | OK | The bookmarklet **pins the project** it came from, so a fixed link (an external page) still lands in the right project; a page in another project uses that project; organization pages fall back to the pinned one; tests 89/89 |
 | 0.2.18 | OK | OK | The Links hub has an **info** button that explains the bookmarklet in a dialog (outside click or Escape closes) and the About tabs no longer carry it; tests 89/89 |
 | 0.2.19 | OK | OK | The hub shows a red **pending-proposal** pill with the project-wide count to callers who can manage the project settings, linking to the proposals (FR-LINK-9); tests 90/90 |
+| 0.3.0 | OK | OK | **First stable release from this line**, published 2026-10-18 as both editions at 0.3.0 through the Entra/OIDC identity (no PAT), with every feature and fix since 0.2.0; see the release block above |
 | 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed

@@ -106,6 +106,10 @@ ado-static/
   push that can change the shipped extension publishes the dev edition.
 - `main` is the **released line**. A release **merges** `develop` into `main` (a merge commit), so
   `main` contains every commit `develop` has, and the release tag sits on that merge commit.
+- The release merge commit carries the **default one-line subject** (`Merge pull request #N from
+  f-steff/develop`) with **no body**, so the commit overview on `main` shows only the merge line. Use
+  `gh pr merge --merge --subject "Merge pull request #N from f-steff/develop" --body ""`; without it,
+  GitHub appends the pull request's title (and body) to the commit message.
 - The ruleset *Protect main and develop* requires a pull request, the status checks, no deletion and no
   force-push - but **not** linear history. That last rule was removed deliberately: it forced GitHub's
   rebase-merge, which rewrites the committer, so **every SHA changes** and `main` became a *parallel
