@@ -107,9 +107,18 @@ ado-static/
 - `main` is the **released line**. A release **merges** `develop` into `main` (a merge commit), so
   `main` contains every commit `develop` has, and the release tag sits on that merge commit.
 - The release merge commit carries the **default one-line subject** (`Merge pull request #N from
-  f-steff/develop`) with **no body**, so the commit overview on `main` shows only the merge line. Use
-  `gh pr merge --merge --subject "Merge pull request #N from f-steff/develop" --body ""`; without it,
-  GitHub appends the pull request's title (and body) to the commit message.
+  f-steff/develop`) and no body, via
+  `gh pr merge --merge --subject "Merge pull request #N from f-steff/develop" --body ""`.
+- Because a release merges `develop`, `main` also contains the individual `develop` commits. That is
+  deliberate (it is what keeps the two lines one history); the **release overview** is the first-parent
+  chain:
+
+  ```
+  git log --first-parent --merges --oneline main
+  ```
+
+  One line per pull request, newest first. Squashing a release to flatten that list would put the tag on
+  a synthetic commit, leave `develop`'s commits outside `main`, and make the next release replay them.
 - The ruleset *Protect main and develop* requires a pull request, the status checks, no deletion and no
   force-push - but **not** linear history. That last rule was removed deliberately: it forced GitHub's
   rebase-merge, which rewrites the committer, so **every SHA changes** and `main` became a *parallel
