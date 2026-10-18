@@ -124,18 +124,6 @@ table.org-table td:not(.col-project) {
     max-width: 900px;
 }
 
-/* The About tab's bookmarklet link: it is meant to be dragged or bookmarked, not clicked here, so it
-   is drawn as something to grab rather than as an ordinary link. */
-.help a.bookmarklet {
-    display: inline-block;
-    padding: 6px 12px;
-    border: 1px dashed rgba(var(--palette-neutral-20, 200, 200, 200), 1);
-    border-radius: 4px;
-    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
-    font-weight: 600;
-    cursor: grab;
-}
-
 /* Package details table on the About tab. */
 .about-table {
     border-collapse: collapse;

@@ -47,6 +47,19 @@ h1 {
     margin: 4px 0 16px;
 }
 
+/* Subtitle row: the text on the left, the Bookmarklet button on the right. */
+.hub-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 4px 0 16px;
+}
+
+.hub-header-row .subtitle {
+    margin: 0;
+}
+
 table.data-table {
     width: 100%;
     border-collapse: collapse;
