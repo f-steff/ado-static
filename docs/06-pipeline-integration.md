@@ -203,6 +203,11 @@ The task needs the extension's `{publisher}.{extension}` ids (its inputs default
 edition; dev pipelines pass `extension: static-dev`). Requires "Allow scripts to access the OAuth
 token" on the pipeline.
 
+> The token is the pipeline's **own** identity, so the pipeline can only write where that identity may
+> read: Azure DevOps grants no extension data to non-member (anonymous or public) users, and a
+> project-scoped build identity cannot write another project's collection. `StaticAdmin@0`, which walks
+> every project in the organization, therefore needs an identity that can see them all.
+
 > The data scope is per **extension id**, so the two editions keep **separate** data. Naming an
 > edition that is not installed fails with `GET ... -> 500 {"message":"TF400898: An Internal Error
 > Occurred."}` (the service answers 500, not 404, for a missing data scope); the task adds a hint

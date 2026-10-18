@@ -1,0 +1,66 @@
+/*
+ * Shared in-DOM dialog styles.
+ * Rationale: this extension never uses window.confirm/alert (the hosted iframe cannot rely on them),
+ * so the confirmation dialog is plain DOM. It is used by both the settings page and the Links hub,
+ * which is why the styles live here rather than in one page's stylesheet - an unstyled dialog in the
+ * hub was a real bug (the overlay was position:static and the panel had no padding).
+ */
+
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.dialog {
+    background: var(--background-color, #ffffff);
+    color: var(--text-primary-color, #201f1e);
+    border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 6px;
+    padding: 16px 20px;
+    max-width: 460px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.dialog-message {
+    margin: 0 0 16px;
+    /* The message may contain newlines (a two-part question); keep them readable. */
+    white-space: pre-line;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Informational dialog (the hub's bookmarklet instructions): a title, a block of steps and a link. */
+.dialog-info {
+    max-width: 520px;
+}
+
+.dialog-title {
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.dialog-body p {
+    margin: 0 0 10px;
+    line-height: 1.45;
+}
+
+/* The draggable bookmarklet link: it must read as something to grab, not as an ordinary link. */
+.dialog-body a.bookmarklet {
+    display: inline-block;
+    padding: 6px 12px;
+    border: 1px dashed rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+    border-radius: 4px;
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    font-weight: 600;
+    cursor: grab;
+}

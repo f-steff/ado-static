@@ -16,7 +16,8 @@ ado-static/
   ci/                # helper scripts used by the workflows (version, identifiers)
   scripts/           # build.js, serve.js, test.js, tfx.js
   src/
-    common/          # shared helpers (data-service, urls, ado-url, link-builder, ...)
+    common/          # shared helpers (data-service, urls, ado-url, link-builder, ...) and the
+                     # stylesheets entry points link (link-editor.css, dialog.css)
     hub/             # Pages hub (landing + sandboxed viewer)
     links/           # Links hub
     pipelines/       # Pipelines hub
@@ -85,6 +86,14 @@ ado-static/
 
 ## Branching and releases
 
+> **Sync `develop` before cutting a branch.** The merges happen on the remote (a pull request), so a
+> local `develop` goes stale silently: `git checkout develop && git fetch --prune origin &&
+> git pull --ff-only` first, then `git checkout -b <branch>`. A branch cut from a stale `develop`
+> re-applies already-merged commits, so its pull request is **conflicting** - and GitHub runs **no
+> workflows at all** for a conflicting pull request, which looks like a pull request whose checks never
+> arrive (three attempts were spent on this before the cause was found). When checks do not appear,
+> check the pull request's `mergeable` state first.
+
 - Only **`main`** and **`develop`** are long-lived; a branch exists for its pull request. GitHub
   deletes the head branch when the pull request merges (`delete_branch_on_merge` is on), so no merged
   branch accumulates.
@@ -107,11 +116,15 @@ ado-static/
   branch containing its commit is selected - so `v0.1.0` shows under `main`, not under `develop`.
   Releases from the fix onwards tag `main`'s merge commit, and `main` genuinely contains `develop`.
 - A workflow runs the file **at the ref it was dispatched on**, and the `workflow_dispatch` UI defaults
-  to the default branch. So while `main` still carries the pre-release workflow files, a manual
-  dispatch from `main` runs those older definitions - for example `actions/checkout@v4` /
-  `actions/setup-node@v4`, which raise a Node.js 20 deprecation annotation. Pick `develop` (or
-  `--ref develop`), or sync the non-shipping workflow files to `main` with a housekeeping-only change:
-  because `.github/**` is in `paths-ignore`, that publishes nothing.
+  to the default branch. `main` carries the workflow files **of the last release**, so a manual dispatch
+  from `main` runs those definitions, without any fix that landed on `develop` since. Pick `develop`
+  (or `--ref develop`) when you need current behaviour, or release - the guard (D26) deliberately allows
+  **no** other route to `main`, so a workflow there cannot be patched without one. Two consequences:
+  a workflow may depend only on files the released branch really contains (`share-dev.yml` reads its
+  input through `ci/dispatch-input.mjs` and its report through `ci/shared-with.mjs`, and both travel in
+  the same pull request as the workflow - the missing pair is B6 in
+  [`13-test-plan.md`](13-test-plan.md)), and a report step must never be able to fail the run that
+  performed the action.
 
 ## CI
 
@@ -120,7 +133,9 @@ Workflows live in `.github/workflows/` (GitHub's requirement):
 - `ci.yml` - on pull requests and pushes: install, lint, type check, test, `verify:clean`, build,
   and upload the VSIX as a build artifact (no publish).
 - `publish-dev.yml` - on push to `develop`, or manually with an optional `version`: publish the
-  private dev edition at the next revision of the released minor.
+  private dev edition at the next revision of the released minor. The tag is pushed as soon as the
+  **upload** is accepted (`--no-wait-validation`), and the asynchronous Marketplace validation is
+  reported into the run summary rather than gating the tag (D29).
 - `publish-stable.yml` - on push to `main`: publish the stable edition **and** the dev edition at the
   same version.
 - `share-dev.yml` - manual (`workflow_dispatch`): (un)share the dev edition with an organization and
@@ -162,14 +177,14 @@ computed inside the job cannot appear in the Actions list. The workflows compens
 
 A publish is skipped when **every** changed path in the push is documentation, the CI/release
 scripts (`ci/**`), tests, or repository housekeeping (`paths-ignore`) - such a push cannot change the
-shipped extension, so it must not mint a version. `overview.md` and `LICENSE` are packaged into the
+shipped extension, so it must not mint a version. `marketplace-advertisement.md` and `LICENSE` are packaged into the
 VSIX and are deliberately **not** ignored; neither is `scripts/**`, because that tooling decides what
 ends up in the package. A mixed push still publishes. The local `t/` scratch folder (archived
 migration material, downloaded backups) is gitignored outright - it must never be committed.
 
 ## Versioning
 
-Versions are derived from git tags (see [README](../README.md)); the rules live in
+Versions are derived from git tags; the rules live in
 [`ci/version.mjs`](../ci/version.mjs) and are unit-tested in
 [`tests/version.test.mjs`](../tests/version.test.mjs):
 

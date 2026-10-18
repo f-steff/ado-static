@@ -10,7 +10,7 @@
 | **Report tab (`reporttab`)** | Build results iframe | Render the HTML a `PublishPage@0` run attached (opt-in via `tabName`). |
 | **`PublishPage` task** | Build/release agent | Publish/update a page's content and, optionally, a build report tab. |
 | **`PublishLink` task** | Build/release agent | Create or update a fixed link. |
-| **Extension Data Service** | Azure DevOps | Persist project data (index, content, links) in the `Default/Current` scope, per-project collection `static-{projectId}`. |
+| **Extension Data Service** | Azure DevOps | Persist project data (index, content, links, proposals) in the `Default/Current` scope, per-project collection `static-{projectId}`; private links live in the `User/Me` scope of `static-{projectId}-private` ([04](04-data-model.md)). |
 | **Azure DevOps REST APIs** | Azure DevOps | Git (repos/commits/PRs) and Pipelines (definitions/builds/timelines) data for the hubs. |
 
 ```
@@ -54,7 +54,7 @@ Key points:
 - `files` ships `dist` (addressable) plus the individual PNG icons and the two task folders.
 - Scopes: `vso.extension.data_write` (our own data), `vso.code` (repos/commits/PRs),
   `vso.build` (pipelines/builds/timelines).
-- The Marketplace listing content (`overview.md`, `LICENSE`), `repository`, `links`, `tags` and
+- The Marketplace listing content (`marketplace-advertisement.md`, `LICENSE`), `repository`, `links`, `tags` and
   `categories` live in the base manifest.
 
 ## Runtime patterns
@@ -140,6 +140,24 @@ The tasks write through `https://extmgmt.dev.azure.com/.../Collections/static-{p
 under the extension identity, so the token must be authorized for that extension's data. The
 token needs "Allow scripts to access the OAuth token" enabled on the pipeline.
 
+### Permission-aware UI (D27)
+
+The hubs are readable by every project member, so a control that only works for some of them must ask
+first. `src/common/permissions.ts` probes the **caller** with the documented Security REST API
+(`GET /_apis/permissions/{namespaceId}/{bit}?alwaysAllowAdministrators=true`), resolving the numeric
+bit from the namespace definition by action name; the response parsing is pure logic in
+`src/common/permission-parse.ts` (unit tested). Two probes exist:
+
+| Probe | Namespace | Action | Used for |
+| --- | --- | --- | --- |
+| `canAccessProjectSettings()` | Project | `MANAGE_PROPERTIES` (project token) | Wording the Links hub empty state for members who cannot open Project settings. |
+| `canAccessOrgSettings()` | Collection | `GENERIC_WRITE` | Showing or hiding the Org.Settings button on the project settings page. |
+
+A probe that cannot be evaluated returns `null` (**unknown**) and the caller keeps showing the
+control: hiding it from a user who does have access is the worse failure, and the host denies the
+action anyway. These probes decide **what the UI offers**, not what the service allows - the
+extension data service authorizes every write itself.
+
 ## Sequences
 
 ```
@@ -159,4 +177,10 @@ Publish a page / report tab:  Pipeline -> PublishPage task
 
 Publish a link:  Pipeline -> PublishLink task
   read url or urlFile; upsert the link in the links document (area=fixed, source=pipeline)
+
+Private links and proposals:  Links hub -> private store -> project settings
+  hub: read the user's store (User/Me scope) + the project's proposal list; render both tables
+  Share: write a snapshot to `link-proposals` (state=open) and mark the private link `proposal`
+  settings: review the snapshot; Add to project creates a normal link, Reject marks the record
+  hub (next visit): reconcile() promotes (removes the private original) or marks the rejection
 ```

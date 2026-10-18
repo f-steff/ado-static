@@ -10,10 +10,37 @@ Three surfaces:
 
 ### Links hub (the `Links` entry)
 
-A curated list of bookmarkable links (Title, slug, Area, comment). Each row's href is the extension
-URL `?page={slug}` (copyable); a plain click navigates the host to the target in the same tab. A
-link is either **fixed** (a stored URL, possibly outside the project) or **dynamic** (re-resolved at
-open). The **Area** column shows a short category: Repo, PR, Pipeline, Artifact, Fixed.
+One table, ordered **alphabetically by title**, mixing two kinds of link:
+
+| Column | Content |
+| --- | --- |
+| Title | The link, addressed by the extension URL `?page={slug}` (copyable); a plain click navigates the host to the target in the same tab. A link is either **fixed** (a stored URL, possibly outside the project) or **dynamic** (re-resolved at open). |
+| Slug | The stable, bookmarkable URL segment. |
+| Area | Short category: Repo, PR, Pipeline, Artifact, Fixed. |
+| Comment | Free text. |
+| Status | `project` - curated in Project settings; `private` - only the signed-in user sees it; `pending` - offered to the project, awaiting a decision. |
+| Actions | Edit / Delete / Share on the user's own links only (a project link is managed in Project settings, so it has none), on one unwrapped row. |
+
+**Status and Actions sit at the right edge** and take only the width their content needs, so the four
+data columns absorb the rest of the row.
+
+A **filter** box (the same interaction as the Repos hub) narrows the list as you type, matching any
+substring of the **title, slug or comment**, case-insensitively. With no match the table says so,
+naming the filter.
+
+The empty state follows the permission probe: a member who cannot open Project settings is told to ask
+a project administrator, or to add a private link.
+
+An **Add private link** button opens the same editor as the settings page (title, slug, URL, comment
+and the cascading builder), in-page, with Save/Cancel; the view is addressable (`#add`, `#edit=...`) so
+Back works.
+
+**Share** offers a private link to the project: a confirmation explains what is sent, then a frozen
+snapshot appears on the project settings page as a **proposed link**, where anyone who can open those
+settings may add it. Adding it promotes the link to the project (the project owns it; the member's
+private original is cleaned up on their next visit), and rejecting it returns the private link to
+`private`, whose Share button then says the last proposal was not accepted. A private link resolves a
+`?page=<slug>` bookmark only when no project link owns that slug.
 
 ### Pages hub (the `Pages` entry)
 
@@ -61,7 +88,76 @@ An add/edit form (Title, Slug, URL, Comment) with a **cascading builder** for th
 Area (Repository, Pull request, Pipeline, Fixed) and keep choosing until an option is marked
 `[valid]`; a long option list gets a filter box. Pasting a full URL pre-selects the closest match;
 an out-of-project URL is stored as **Fixed**. The table lists Title, Slug, Area, URL and Comment,
-with View / Edit / Delete per row, and a links **Trash**.
+with View / Edit / Delete per row, and a links **Trash**. The same form (and its validation) is shared
+with the Links hub, where members use it for private links.
+
+#### Proposed links
+
+Under the links table, **Proposed links (N)** lists the private links members offered to this project:
+Title, Slug, Area, URL, Comment and **Proposed by**, with **Add to project** and **Reject** per row.
+Adding creates an ordinary project link from the frozen snapshot (attributed to the proposer via
+`proposedBy`) and behaves exactly like a link added here; rejecting returns the private link to its
+owner with a message. A proposal whose slug was taken since it was offered, or whose URL no longer has
+a valid shape, explains why and offers only **Reject**.
+
+#### Adding a private link from any page (bookmarklet)
+
+The **Links** hub has an **info** button (a circled i) beside its subtitle. It opens a dialog that
+explains the idea and offers the **Add to Static** link: drag that link to the bookmarks bar, or
+right-click it and choose *Bookmark link*, then click that bookmark on any Azure DevOps page. A click on
+the dimmed backdrop, or Escape, closes the dialog without doing anything.
+
+Clicking the bookmark opens the hub with `?url=<that page's URL>`, which shows the **private-link form**
+with the URL already in the field and the cascading builder matched - for a build log URL the pipeline,
+build, view and stage/job/task target are selected too. Title, slug and comment are still yours to fill
+in, and the link is **yours**: it stays visible only to you until you share it with the project.
+
+The link the dialog offers is built for the project it came from **and pins it**: a page outside Azure
+DevOps (a fixed link) still lands there, while a page in another project lands in **that** project.
+
+#### Pending proposals in the hub
+
+When a project has proposed links - links members shared from their own private list - and the caller
+can open the project settings page, the hub shows a red pill next to the info button with the count
+(for example *1 pending*). It counts **every** proposal in the project, not only the caller's own, and
+it opens Project settings -> Static -> Links, where each proposal can be accepted or rejected.
+
+The pill is permission-aware: a caller who provably cannot open the settings page does not see it, and
+an unknown permission keeps it visible (D27). It disappears when no proposal is left.
+
+**The same bookmarklet as text** (released edition, for a project you pick each time), for a browser
+that will not let you bookmark the link directly:
+
+```js
+javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const a=/\.visualstudio\.com$/.test(location.host);const d=location.host==='dev.azure.com';const o=a?location.host.split('.')[0]:s[0];const p=a?s[0]:(d?s[1]:undefined);const t=p&&p[0]!=='_'?{o:o,p:p}:null;if(!t)return;location.href='https://dev.azure.com/'+t.o+'/'+t.p+'/_apps/hub/f-steff.static.static-links-hub?url='+encodeURIComponent(location.href)})()
+```
+
+That form has no pinned project: it uses the project of the page you click it on and does nothing
+outside Azure DevOps, so take the link from the target project's own **Links** hub (the info button)
+when you need a bookmarklet that also works on an external page.
+
+Create a bookmark and paste the code into its address field (browsers strip `javascript:` when it is
+pasted into the address bar itself), and give it a name such as *Add to Static*.
+
+> **Development edition:** replace `f-steff.static` with `f-steff.static-dev` in the URL above.
+> Nothing else changes.
+
+Used outside a project - the organization home, for example - the bookmarklet does nothing: a link
+belongs to a project.
+
+Anything that can build a URL can do the same:
+
+```
+Private link:  https://dev.azure.com/{org}/{project}/_apps/hub/{publisher}.{extension}.static-links-hub?url={encoded url}
+Project link:  https://dev.azure.com/{org}/{project}/_settings/{publisher}.{extension}.static-admin-hub?url={encoded url}
+```
+
+The **settings page** accepts the same parameter and opens its **Links** tab instead, which creates a
+**project** link for everybody; that is the form to use when the link is meant for the whole project. The
+bookmarklet deliberately targets the hub, so it never creates a project link.
+
+The parameter is only read from the address bar. It is never logged, never stored (unless the link is
+saved) and any value that is not an absolute `http(s)` URL is ignored.
 
 ### Pages tab
 
@@ -112,11 +208,12 @@ page, which links back here. There is no enable/disable switch: Static is always
 
 ### Backup tab
 
-> The **release** (`static`) and **development** (`static-dev`) editions keep **separate** data, so
-> installing one in place of the other starts from an empty project. Switching editions therefore
-> means: **Download** a backup, install the other edition, then **Restore** it (here or from a
-> pipeline). Without that sequence the data looks lost - it is still in the other edition's scope
-> and only becomes visible again after switching back.
+> Only **one** edition can be installed in an organization at a time, and the **release** (`static`) and
+> **development** (`static-dev`) editions keep **separate** data - so installing one in place of the
+> other starts from an empty project. Switching editions therefore means: **Download** a backup,
+> uninstall the current edition, install the other one, then **Restore** it (here or from a pipeline).
+> Without that sequence the data looks lost - it is still in the other edition's scope and only becomes
+> visible again after switching back.
 
 **Download backup** reads every project's collection and saves a single ZIP
 (`static-backup-{organization}-{date}.zip`) holding `static-backup.json` (`format: "static-export"`,
@@ -150,10 +247,16 @@ stable data before a release) and doubles as a backup.
 | Capability | Required |
 | --- | --- |
 | View hubs / read a page | Normal project read access. |
-| Manage links/pages | Project administrator. |
+| Private links (add, edit, delete, share) | Normal project read access - the store is user-scoped, so only its owner can reach it. |
+| Manage links/pages, and add a proposed link | Project administrator (the settings hub is only reachable via Project settings). |
+| Use the organization settings (Overview, Backup) | Collection administrator (the organization settings hub is only reachable there). |
 
 Enforcement: the settings hub is only reached via Project settings; data writes use the caller's
-token, so unauthorized writes fail server-side (defence in depth).
+token, so unauthorized writes fail server-side (defence in depth). What the UI *offers* is decided by
+the permission probes in [03](03-architecture.md#permission-aware-ui-d27): the project settings page
+hides its **Org.Settings** button when the caller cannot open the organization settings, and the Links
+hub tells a member who cannot open Project settings to ask an administrator instead of pointing them
+at a page they cannot reach.
 
 ## Accessibility and theming
 

@@ -14,6 +14,7 @@ import {
 import { countOpenPullRequests, countProjectRepositories } from "./git-service";
 import { countPipelines } from "./build-service";
 import { DynamicSpec } from "./dynamic-links";
+import { promotionFields } from "./private-links";
 import { describeError, logDebug } from "./log";
 
 /**
@@ -106,6 +107,18 @@ export function organizationName(): string {
   return host && host.name ? host.name : "";
 }
 
+/** The current project's display name (empty when there is no project context). */
+export function currentProjectName(): string {
+  const webContext = SDK.getWebContext();
+  return webContext && webContext.project ? webContext.project.name : "";
+}
+
+/** The current user's stable id and display name (empty on the organization-level pages). */
+export function currentUser(): { id: string; name: string } {
+  const user = SDK.getUser();
+  return { id: user && user.id ? user.id : "", name: user && user.displayName ? user.displayName : "" };
+}
+
 /** Per-project collection name for the current project. */
 function staticCollection(): string {
   return staticCollectionFor(currentProjectId());
@@ -119,8 +132,17 @@ export function staticCollectionFor(targetProjectId: string): string {
   return `static-${targetProjectId}`;
 }
 
-/** Base REST URL for a collection's documents. */
+/** Base REST URL for a collection's documents in the account-wide scope. */
 function documentsBase(collection: string): string {
+  return documentsBaseFor("Default/Current", collection);
+}
+
+/**
+ * Base REST URL for a collection's documents in one scope.
+ * Rationale: private links live in the **User** scope (`Scopes/User/Me`), which the service resolves
+ * from the caller's token, so every user owns a separate store without us having to filter by owner.
+ */
+function documentsBaseFor(scope: string, collection: string): string {
   const context = SDK.getExtensionContext();
   const organization = organizationName();
   if (!organization || !context || !context.publisherId || !context.extensionId) {
@@ -128,8 +150,18 @@ function documentsBase(collection: string): string {
   }
   return (
     `https://extmgmt.dev.azure.com/${organization}/_apis/ExtensionManagement/InstalledExtensions/` +
-    `${context.publisherId}/${context.extensionId}/Data/Scopes/Default/Current/Collections/${collection}/Documents`
+    `${context.publisherId}/${context.extensionId}/Data/Scopes/${scope}/Collections/${collection}/Documents`
   );
+}
+
+/** Per-project collection name for the current user's private links (one store per project). */
+function privateCollection(): string {
+  return `${staticCollection()}-private`;
+}
+
+/** Base URL of the current user's private documents for this project. */
+function privateDocumentsBase(): string {
+  return documentsBaseFor("User/Me", privateCollection());
 }
 
 /** Issues an authenticated request to the extension data REST API. */
@@ -143,15 +175,20 @@ async function dataRequest(method: string, url: string, body?: unknown): Promise
 }
 
 /** GETs a document; returns null for 404 (absence is a valid state). */
-async function getDocument(collection: string, id: string): Promise<Record<string, unknown> | null> {
-  const response = await dataRequest("GET", `${documentsBase(collection)}/${id}?api-version=${API_VERSION}`);
+async function getDocumentAt(base: string, id: string): Promise<Record<string, unknown> | null> {
+  const response = await dataRequest("GET", `${base}/${id}?api-version=${API_VERSION}`);
   if (response.status === 404) {
     return null;
   }
   if (!response.ok) {
-    throw new Error(`GET ${collection}/${id} -> ${response.status} ${await response.text()}`);
+    throw new Error(`GET ${id} -> ${response.status} ${await response.text()}`);
   }
   return (await response.json()) as Record<string, unknown>;
+}
+
+/** GETs a document from a project collection (thin wrapper over `getDocumentAt`). */
+async function getDocument(collection: string, id: string): Promise<Record<string, unknown> | null> {
+  return getDocumentAt(documentsBase(collection), id);
 }
 
 /**
@@ -161,16 +198,16 @@ async function getDocument(collection: string, id: string): Promise<Record<strin
  * body carries the current `__etag` (HTTP 400 "document version does not match"). We
  * therefore read the existing document and carry its `__etag`, retrying once on a race.
  */
-async function putDocument(collection: string, document: Record<string, unknown>): Promise<void> {
+async function putDocumentAt(base: string, document: Record<string, unknown>): Promise<void> {
   const id = String(document.id || "");
   if (!id) {
     throw new Error("Cannot store a document without an id.");
   }
-  const url = `${documentsBase(collection)}/${id}?api-version=${API_VERSION}`;
+  const url = `${base}/${id}?api-version=${API_VERSION}`;
   const body: Record<string, unknown> = { ...document };
 
   if (body.__etag === undefined) {
-    const existing = await getDocument(collection, id);
+    const existing = await getDocumentAt(base, id);
     if (existing && existing.__etag !== undefined) {
       body.__etag = existing.__etag;
     }
@@ -181,39 +218,54 @@ async function putDocument(collection: string, document: Record<string, unknown>
     const text = await response.text();
     if (/version does not match/i.test(text)) {
       // Another writer changed the document; refresh the etag and retry once.
-      const existing = await getDocument(collection, id);
+      const existing = await getDocumentAt(base, id);
       if (existing && existing.__etag !== undefined) {
         body.__etag = existing.__etag;
       }
       response = await dataRequest("PUT", url, body);
     } else {
-      throw new Error(`PUT ${collection}/${id} -> 400 ${text}`);
+      throw new Error(`PUT ${id} -> 400 ${text}`);
     }
   }
   if (!response.ok) {
-    throw new Error(`PUT ${collection}/${id} -> ${response.status} ${await response.text()}`);
+    throw new Error(`PUT ${id} -> ${response.status} ${await response.text()}`);
   }
+}
+
+/** PUTs a document into a project collection (thin wrapper over `putDocumentAt`). */
+async function putDocument(collection: string, document: Record<string, unknown>): Promise<void> {
+  return putDocumentAt(documentsBase(collection), document);
 }
 
 /** DELETEs a document, tolerating 404. */
-async function deleteDocument(collection: string, id: string): Promise<void> {
-  const response = await dataRequest("DELETE", `${documentsBase(collection)}/${id}?api-version=${API_VERSION}`);
+async function deleteDocumentAt(base: string, id: string): Promise<void> {
+  const response = await dataRequest("DELETE", `${base}/${id}?api-version=${API_VERSION}`);
   if (!response.ok && response.status !== 404) {
-    throw new Error(`DELETE ${collection}/${id} -> ${response.status} ${await response.text()}`);
+    throw new Error(`DELETE ${id} -> ${response.status} ${await response.text()}`);
   }
 }
 
+/** DELETEs a document from a project collection (thin wrapper over `deleteDocumentAt`). */
+async function deleteDocument(collection: string, id: string): Promise<void> {
+  return deleteDocumentAt(documentsBase(collection), id);
+}
+
 /** LISTs a collection; an empty collection returns 404, treated as "no documents". */
-async function listCollection(collection: string): Promise<Array<Record<string, unknown>>> {
-  const response = await dataRequest("GET", `${documentsBase(collection)}?api-version=${API_VERSION}`);
+async function listAt(base: string): Promise<Array<Record<string, unknown>>> {
+  const response = await dataRequest("GET", `${base}?api-version=${API_VERSION}`);
   if (response.status === 404) {
     return [];
   }
   if (!response.ok) {
-    throw new Error(`LIST ${collection} -> ${response.status} ${await response.text()}`);
+    throw new Error(`LIST -> ${response.status} ${await response.text()}`);
   }
   const data = (await response.json()) as Array<Record<string, unknown>>;
   return Array.isArray(data) ? data : [];
+}
+
+/** LISTs a project collection (thin wrapper over `listAt`). */
+async function listCollection(collection: string): Promise<Array<Record<string, unknown>>> {
+  return listAt(documentsBase(collection));
 }
 
 /** Shape of an index when the project has no pages yet (avoids null checks upstream). */
@@ -471,6 +523,12 @@ export interface LinkEntry {
   // "pipeline" when published by the PublishLink task. Absent for legacy links.
   area?: string;
   source?: string;
+  // Private links only: the proposal this link is currently part of (absent when it is not
+  // proposed), and when the last proposal was rejected (so the hub can say so and offer Share again).
+  proposal?: { proposalId: string; proposedUtc: string };
+  rejectedUtc?: string;
+  // Project links created by accepting a proposal: who proposed it (display name, informational).
+  proposedBy?: string;
 }
 
 export interface LinkTrashEntry {
@@ -626,6 +684,260 @@ export async function purgeExpiredLinks(days = 5): Promise<LinkIndex> {
   index.trash = (index.trash || []).filter((entry) => !expired.includes(entry));
   await saveLinks(index);
   return index;
+}
+
+// ---- Private links (one store per user, per project) ----------------------------------------
+
+/**
+ * The current user's private links for this project.
+ *
+ * Rationale: a link a member creates for themselves must not be visible to anybody else, so it is
+ * stored in the **User** scope (`Scopes/User/Me`, one store per user per project) instead of in the
+ * project's shared collection behind an owner filter - the service then does the isolation, and a
+ * bug in our query cannot leak somebody else's links.
+ */
+export interface PrivateLinksIndex {
+  id: "private-links";
+  kind: "private-links";
+  schemaVersion: number;
+  revision: number;
+  links: LinkEntry[];
+}
+
+/** Shape of a user's private link store when they have not created one yet. */
+export function emptyPrivateLinks(): PrivateLinksIndex {
+  return { id: "private-links", kind: "private-links", schemaVersion: 1, revision: 0, links: [] };
+}
+
+/** Reads the current user's private links; an empty store (or a first run) reads as empty. */
+export async function getPrivateLinks(): Promise<PrivateLinksIndex> {
+  try {
+    const doc = await getDocumentAt(privateDocumentsBase(), "private-links");
+    return (doc as unknown as PrivateLinksIndex) || emptyPrivateLinks();
+  } catch (error) {
+    logDebug("private links unreadable; using an empty store.", error);
+    return emptyPrivateLinks();
+  }
+}
+
+/** Writes the current user's private links, incrementing `revision`. */
+export async function savePrivateLinks(index: PrivateLinksIndex): Promise<void> {
+  const next: PrivateLinksIndex = {
+    ...index,
+    id: "private-links",
+    kind: "private-links",
+    schemaVersion: 1,
+    revision: (index.revision || 0) + 1
+  };
+  await putDocumentAt(privateDocumentsBase(), next as unknown as Record<string, unknown>);
+}
+
+/** Creates a private link for the current user. */
+export async function addPrivateLink(
+  title: string,
+  slug: string,
+  url: string,
+  comment = "",
+  dynamic?: DynamicSpec,
+  area?: string
+): Promise<PrivateLinksIndex> {
+  const index = await getPrivateLinks();
+  index.links = index.links || [];
+  if (privateSlugInUse(index, slug)) {
+    throw new Error(`The slug '${slug}' is already in use by one of your private links.`);
+  }
+  index.links.push({
+    linkId: newPageId(),
+    slug,
+    title,
+    url,
+    comment,
+    order: index.links.length,
+    enabled: true,
+    hidden: false,
+    updatedUtc: new Date().toISOString(),
+    updatedBy: "",
+    ...(dynamic ? { dynamic } : {}),
+    ...(area ? { area } : {})
+  });
+  await savePrivateLinks(index);
+  return index;
+}
+
+/** Applies a partial update to one private link. */
+export async function updatePrivateLink(
+  linkId: string,
+  patch: Partial<LinkEntry>
+): Promise<PrivateLinksIndex> {
+  const index = await getPrivateLinks();
+  const link = (index.links || []).find((candidate) => candidate.linkId === linkId);
+  if (link) {
+    Object.assign(link, patch);
+  }
+  await savePrivateLinks(index);
+  return index;
+}
+
+/** Deletes private links by id (used by Delete, and by the promotion cleanup). */
+export async function deletePrivateLinks(ids: string[]): Promise<PrivateLinksIndex> {
+  const index = await getPrivateLinks();
+  const wanted = new Set(ids);
+  index.links = (index.links || []).filter((link) => !wanted.has(link.linkId));
+  if (wanted.size > 0) {
+    await savePrivateLinks(index);
+  }
+  return index;
+}
+
+/** Case-insensitive slug reservation among the user's private links. */
+export function privateSlugInUse(index: PrivateLinksIndex, slug: string): boolean {
+  const needle = (slug || "").toLowerCase();
+  return (index.links || []).some((link) => link.slug.toLowerCase() === needle);
+}
+
+// ---- Link proposals (a private link offered to the project) ---------------------------------
+
+/** State of a proposal: awaiting a decision, accepted (promoted), or rejected. */
+export type ProposalState = "open" | "accepted" | "rejected";
+
+/**
+ * A snapshot of a private link, offered to the project.
+ *
+ * Rationale: the administrators review a **snapshot**, so later edits to the private link cannot
+ * silently change what they approved. `privateLinkId` is what lets the proposer's client recognise
+ * the outcome and clean up (promotion) without the reviewer ever needing to write to the user scope.
+ */
+export interface LinkProposal {
+  proposalId: string;
+  privateLinkId: string;
+  slug: string;
+  title: string;
+  url: string;
+  comment: string;
+  dynamic?: DynamicSpec;
+  area?: string;
+  proposedById: string;
+  proposedByName: string;
+  proposedUtc: string;
+  state: ProposalState;
+  decidedUtc?: string;
+  decidedBy?: string;
+  /** Set on acceptance: the project link that now owns the proposal. */
+  acceptedLinkId?: string;
+}
+
+/** The project's proposal list (shared data, written only by the review UI). */
+export interface ProposalIndex {
+  id: "link-proposals";
+  kind: "link-proposals";
+  schemaVersion: number;
+  revision: number;
+  proposals: LinkProposal[];
+}
+
+/** Shape of a project's proposal list when nothing was ever proposed. */
+export function emptyProposals(): ProposalIndex {
+  return { id: "link-proposals", kind: "link-proposals", schemaVersion: 1, revision: 0, proposals: [] };
+}
+
+/** Reads the project's proposals; an absent document reads as an empty list. */
+export async function getProposals(): Promise<ProposalIndex> {
+  try {
+    const doc = await getDocument(staticCollection(), "link-proposals");
+    return (doc as unknown as ProposalIndex) || emptyProposals();
+  } catch (error) {
+    logDebug("proposals unreadable; using an empty list.", error);
+    return emptyProposals();
+  }
+}
+
+/** Writes the project's proposals, incrementing `revision`. */
+export async function saveProposals(index: ProposalIndex): Promise<void> {
+  const next: ProposalIndex = {
+    ...index,
+    id: "link-proposals",
+    kind: "link-proposals",
+    schemaVersion: 1,
+    revision: (index.revision || 0) + 1
+  };
+  await putDocument(staticCollection(), next as unknown as Record<string, unknown>);
+}
+
+/** Adds or replaces one proposal (a link is proposed once; proposing again refreshes the snapshot). */
+export async function putProposal(proposal: LinkProposal): Promise<ProposalIndex> {
+  const index = await getProposals();
+  index.proposals = (index.proposals || []).filter(
+    (candidate) => candidate.privateLinkId !== proposal.privateLinkId && candidate.proposalId !== proposal.proposalId
+  );
+  index.proposals.push(proposal);
+  await saveProposals(index);
+  return index;
+}
+
+/** Records a decision on one proposal (the acceptance already created the project link). */
+export async function decideProposal(
+  proposalId: string,
+  state: Exclude<ProposalState, "open">,
+  decidedBy: string,
+  acceptedLinkId?: string
+): Promise<ProposalIndex> {
+  const index = await getProposals();
+  const proposal = (index.proposals || []).find((candidate) => candidate.proposalId === proposalId);
+  if (proposal) {
+    proposal.state = state;
+    proposal.decidedUtc = new Date().toISOString();
+    proposal.decidedBy = decidedBy;
+    if (acceptedLinkId) {
+      proposal.acceptedLinkId = acceptedLinkId;
+    }
+    await saveProposals(index);
+  }
+  return index;
+}
+
+/** Removes proposal records by id (the proposer takes its own decided records away again). */
+export async function removeProposals(ids: string[]): Promise<ProposalIndex> {
+  const index = await getProposals();
+  const wanted = new Set(ids);
+  index.proposals = (index.proposals || []).filter((candidate) => !wanted.has(candidate.proposalId));
+  if (wanted.size > 0) {
+    await saveProposals(index);
+  }
+  return index;
+}
+
+/**
+ * Accepts a proposal: the project link is created from the frozen snapshot (so it behaves exactly
+ * like a link an administrator added) and the decision is recorded so the proposer's client can
+ * clean up its private original.
+ *
+ * Rationale for one entry point: the two writes touch different documents and cannot be atomic, so
+ * keeping them adjacent in one place minimises the window and gives the caller a single result.
+ * If the record write fails, the link exists and the proposer's next visit simply forgets the marker
+ * (reconcile treats a missing record as "already applied").
+ */
+export async function acceptProposal(
+  proposalId: string,
+  acceptedBy: string
+): Promise<{ links: LinkIndex; proposals: ProposalIndex }> {
+  const proposals = await getProposals();
+  const proposal = (proposals.proposals || []).find((candidate) => candidate.proposalId === proposalId);
+  if (!proposal) {
+    throw new Error("That proposal no longer exists. Reload the page.");
+  }
+  const links = await getLinks();
+  links.links = links.links || [];
+  if (
+    links.links.some((link) => link.slug.trim().toLowerCase() === proposal.slug.trim().toLowerCase())
+  ) {
+    throw new Error(`The slug '${proposal.slug}' is already used by a project link.`);
+  }
+  const fields = promotionFields(proposal, acceptedBy);
+  const created: LinkEntry = { ...fields, linkId: newPageId(), order: links.links.length };
+  links.links.push(created);
+  await saveLinks(links);
+  const decided = await decideProposal(proposalId, "accepted", acceptedBy, created.linkId);
+  return { links, proposals: decided };
 }
 
 // ---- Repository visibility (hide from the public Repos hub) ---------------------------------

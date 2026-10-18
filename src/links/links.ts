@@ -1,32 +1,93 @@
 import * as SDK from "azure-devops-extension-sdk";
 
-import { LinkEntry, LinkIndex, emptyLinks, purgeExpiredLinks } from "../common/data-service";
+import {
+  LinkEntry,
+  LinkIndex,
+  PrivateLinksIndex,
+  ProposalIndex,
+  addPrivateLink,
+  currentUser,
+  deletePrivateLinks,
+  emptyLinks,
+  emptyPrivateLinks,
+  emptyProposals,
+  getLinks,
+  getPrivateLinks,
+  getProposals,
+  newPageId,
+  purgeExpiredLinks,
+  putProposal,
+  removeProposals,
+  savePrivateLinks,
+  updatePrivateLink
+} from "../common/data-service";
 import { getHeading, iconFor } from "../common/branding";
-import { linkAreaLabel } from "../common/link-url";
+import { acceptablePrefillUrl, addLinkBookmarklet, linkAreaLabel } from "../common/link-url";
 import { resolveLink } from "../common/dynamic-resolve";
-import { HUB_LINKS, pagesHubUrl } from "../common/extension-urls";
+import { HUB_LINKS, currentProjectSettingsUrl, pagesHubUrl } from "../common/extension-urls";
 import { getHostNavigation, HostNavigationService } from "../common/host-nav";
-import { logError, logInfo } from "../common/log";
+import { PermissionState, canAccessProjectSettings } from "../common/permissions";
+import { LinkDraft, createLinkEditor } from "../common/link-editor";
+import { mergedRows, pendingLabel, proposalFor, reconcile, slugTaken } from "../common/private-links";
+import { confirmDialog, infoDialog } from "../common/dialog";
+import { describeError, logError, logInfo } from "../common/log";
 import { encodeQuery, withQueryParam } from "../common/urls";
+import { el, iconButton } from "../common/dom";
+import { ICON_DELETE, ICON_EDIT, ICON_SHARE, ICON_ADD, ICON_INFO, ICON_WARNING } from "../common/icons";
 
 /**
  * Links hub.
  *
- * A curated list of bookmarkable links for this project. Each link is addressed by
- * `?page={slug}` (like pages); selecting one navigates the host to its stored URL in the same
- * tab. Links built from the project stay in-project; a "fixed" link (including one published by
- * the PublishLink task) may point outside it.
+ * Two tables, one heading: the links a project administrator curated for everyone, and the private
+ * links only the signed-in user can see. A private link can be **shared**: that offers a frozen
+ * snapshot to the project's settings page as a proposed link, where anyone with access to those
+ * settings can add it to the project. An accepted proposal is promoted - the project owns the link
+ * and the private original is cleaned up on the owner's next visit (see common/private-links.ts).
+ *
+ * Private links live in the extension data service's **User** scope, so the service isolates them per
+ * user; nothing here filters other people's links out, because they are never in this store.
  */
 
 const HUB_ID = HUB_LINKS;
 
 let nav: HostNavigationService;
+// The project's curated links.
 let index: LinkIndex = emptyLinks();
+// This user's private links for this project.
+let mine: PrivateLinksIndex = emptyPrivateLinks();
+// The project's proposal list (readable by everyone; written only by the settings page).
+let proposals: ProposalIndex = emptyProposals();
 let currentQuery: Record<string, string> = {};
+// Whether the current user may open this project's settings. Only wording and hints depend on it
+// (`null` = could not be evaluated).
+let canOpenProjectSettings: PermissionState = null;
+// "list" or "editor" (add/edit a private link); mirrored into the host hash so Back works.
+let view: "list" | "editor" = "list";
+let editingPrivateId: string | null = null;
+// The filter box's value (title, slug and comment are all searched).
+let filter = "";
+// A one-off message shown above the tables.
+let notice = "";
+
+/** The shared link editor, configured for this user's private links. */
+const linkEditor = createLinkEditor({
+  // The slug must be free among the project's links too: a `?page=<slug>` bookmark resolves project
+  // links first, so reusing one would open somebody else's link.
+  takenSlugs: () => [
+    ...(index.links || []).map((link) => link.slug),
+    ...(index.trash || []).map((entry) => entry.link.slug),
+    ...(mine.links || []).filter((link) => link.linkId !== editingPrivateId).map((link) => link.slug)
+  ],
+  hint: "Private links are visible only to you until you share one with the project.",
+  addLabel: "Add private link",
+  saveLabel: "Save changes",
+  onSave: (draft) => void onSavePrivate(draft),
+  onCancel: () => showList()
+});
 
 // `applyTheme: true` applies the user's theme (light/dark) variables to this document.
 SDK.init({ applyTheme: true });
-logInfo("Pages links hub initializing.");
+logInfo("Links hub initializing.");
 
 // Safety net: report an explicit failure if initialization stalls.
 let settled = false;
@@ -50,46 +111,122 @@ SDK.ready()
       settled = true;
       window.clearTimeout(guard);
       SDK.notifyLoadSucceeded();
-      // Auto-purge links trashed more than the retention window ago, then render the list.
-      index = await purgeExpiredLinks(5);
+      // Auto-purge links trashed more than the retention window ago; the permission probe runs
+      // alongside it, because it only words the empty state and must not delay the rows.
+      const [links, privateLinks, projectProposals, projectSettings] = await Promise.all([
+        purgeExpiredLinks(5),
+        getPrivateLinks(),
+        getProposals(),
+        canAccessProjectSettings()
+      ]);
+      index = links;
+      mine = privateLinks;
+      proposals = projectProposals;
+      canOpenProjectSettings = projectSettings;
+      await applyDecisions();
+      // The editor view is addressable (so Back works and a reload keeps it).
+      const hash = (await nav.getHash()) || "";
+      if (hash === "add") {
+        view = "editor";
+        editingPrivateId = null;
+        linkEditor.reset();
+      } else if (hash.startsWith("edit")) {
+        view = "editor";
+        const wanted = hash.split("=")[1] || "";
+        const link = (mine.links || []).find((candidate) => candidate.linkId === wanted);
+        if (link) {
+          editingPrivateId = link.linkId;
+          linkEditor.setDraft(link, true);
+        } else {
+          // The link is gone (or never existed): fall back to the list rather than an empty form.
+          view = "list";
+        }
+      }
+      // A bookmarklet (or a plain link) can hand us the page it was used on: `?url=<page url>` opens the
+      // private-link editor pre-filled, so the member saves that page as their own link. Only absolute
+      // http(s) URLs are accepted (see acceptablePrefillUrl), and the value is never logged and never
+      // stored unless the link is saved.
+      const incomingUrl = acceptablePrefillUrl(currentQuery.url);
+      if (incomingUrl) {
+        view = "editor";
+        editingPrivateId = null;
+        notice = "";
+        linkEditor.reset();
+        linkEditor.parse(incomingUrl);
+        try {
+          // Keep the view addressable the same way the editor's own buttons do.
+          nav.setHash("add");
+        } catch {
+          // A hash we cannot set must not stop the form from opening.
+        }
+      }
+      nav.onHashChanged((value) => {
+        const next = (value || "").replace(/^#/, "");
+        if (next === "add" || next.startsWith("edit")) {
+          view = "editor";
+        } else {
+          view = "list";
+          editingPrivateId = null;
+        }
+        renderList("");
+      });
       await render();
-      logInfo("Pages links hub ready.", { links: (index.links || []).length });
+      logInfo("Links hub ready.", {
+        links: (index.links || []).length,
+        privateLinks: (mine.links || []).length,
+        proposals: (proposals.proposals || []).length
+      });
     } catch (error) {
       settled = true;
       window.clearTimeout(guard);
       logError("Links initialization failed.", error);
       renderFatal(error);
-      SDK.notifyLoadFailed(error instanceof Error ? error.message : String(error));
+      SDK.notifyLoadFailed(describeError(error));
     }
   })
   .catch((error) => {
     settled = true;
     window.clearTimeout(guard);
     logError("SDK ready failed.", error);
-    SDK.notifyLoadFailed(String(error));
+    SDK.notifyLoadFailed(describeError(error));
   });
 
-/** Tiny element factory. */
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string
-): HTMLElementTagNameMap[K] {
-  const element = document.createElement(tag);
-  if (className) {
-    element.className = className;
+/**
+ * Applies the outcome of any decided proposal to this user's private links.
+ * Rationale: nobody else can write to this user's store, so acceptance does not delete the private
+ * original - the decision travels back through the proposal record and is applied here (promotion
+ * removes the private link, rejection returns it with a marker).
+ */
+async function applyDecisions(): Promise<void> {
+  const owner = currentUser();
+  const plan = reconcile(mine.links || [], proposals.proposals || [], owner.id, new Date());
+  if (!plan.changed) {
+    return;
   }
-  if (text != null) {
-    element.textContent = text;
+  mine = { ...mine, links: plan.links };
+  await savePrivateLinks(mine);
+  if (plan.removeProposalIds.length > 0) {
+    proposals = await removeProposals(plan.removeProposalIds);
   }
-  return element;
+  if (plan.removeLinkIds.length > 0) {
+    // A promoted proposal is a project link now, so that table changed too.
+    index = await getLinks();
+  }
+  logInfo("Applied proposal decisions.", {
+    promoted: plan.removeLinkIds.length,
+    rejected: plan.removeProposalIds.length
+  });
 }
 
 /** Renders either the list or (for a `?page=` bookmark) the resolved target. */
 async function render(): Promise<void> {
   const slug = currentQuery.page || "";
-  const link = slug ? (index.links || []).find((candidate) => candidate.slug === slug) : undefined;
-  if (slug && link) {
+  const projectLink = slug ? (index.links || []).find((candidate) => candidate.slug === slug) : undefined;
+  // A private link resolves only when no project link owns the slug (project links win).
+  const privateLink =
+    slug && !projectLink ? (mine.links || []).find((candidate) => candidate.slug === slug) : undefined;
+  const link = projectLink || privateLink;
+  if (link) {
     const error = await openLink(link);
     if (error) {
       renderList(error);
@@ -117,64 +254,427 @@ async function openLink(link: LinkEntry): Promise<string> {
   return "";
 }
 
-/** The list of links; each title is a link that navigates to its target in the same tab. */
-function renderList(notice: string, loading = false): void {
+/** Shows the list view and puts the address back on the list. */
+function showList(): void {
+  view = "list";
+  editingPrivateId = null;
+  notice = "";
+  try {
+    // A *named* hash rather than "": setting an empty hash leaves a bare trailing '#' in the host URL.
+    nav.setHash("list");
+  } catch {
+    // A hash we cannot set must not stop the form from closing.
+  }
+  renderList("");
+}
+
+/** Opens the editor for a new or an existing private link. */
+function showEditor(link?: LinkEntry): void {
+  editingPrivateId = link ? link.linkId : null;
+  view = "editor";
+  notice = "";
+  if (link) {
+    linkEditor.setDraft(link, true);
+  } else {
+    linkEditor.reset();
+  }
+  try {
+    nav.setHash(link ? `edit=${link.linkId}` : "add");
+  } catch {
+    // Fall through to an in-place switch.
+  }
+  renderList("");
+}
+
+/**
+ * Builds the red pending-proposal pill, or null when there is nothing to review.
+ *
+ * Rationale: the count is **every** proposed link in this project - whoever offered it - because the
+ * caller can accept or reject any of them from the settings page. The pill appears only when the
+ * caller can open that page. The probe answers false only when it could be evaluated; an unknown answer
+ * stays visible (D27), because hiding an action from someone who *can* act is the worse failure.
+ */
+function pendingIndicator(): HTMLButtonElement | null {
+  const count = (proposals.proposals || []).length;
+  if (count === 0 || canOpenProjectSettings === false) {
+    return null;
+  }
+  const label = pendingLabel(count);
+  const button = el("button", "pending-indicator");
+  button.type = "button";
+  button.title =
+    `${label} in Project settings -> Static -> Links: open it to add the proposed link to the project.`;
+  button.setAttribute("aria-label", button.title);
+  const icon = el("span", "pending-indicator-icon");
+  // Shipped markup, never user content, so assigning it as HTML is safe here.
+  icon.innerHTML = ICON_WARNING;
+  button.appendChild(icon);
+  button.appendChild(el("span", undefined, label));
+  button.addEventListener("click", () => {
+    nav.navigate(currentProjectSettingsUrl());
+  });
+  return button;
+}
+
+/**
+ * Builds the info button beside the hub's subtitle.
+ *
+ * Rationale: "bookmarklet" is jargon, and the button is as much an explanation as an action, so it is
+ * the familiar circled-i: pressing it opens the dialog that explains the idea and hands out the link.
+ */
+function bookmarkletInfoButton(): HTMLButtonElement {
+  return iconButton({
+    icon: ICON_INFO,
+    label: "How to save any page as a private link",
+    onClick: () => {
+      void showBookmarkletDialog();
+    }
+  });
+}
+
+/**
+ * Explains the bookmarklet and hands out a link built for this project.
+ *
+ * Rationale: members manage their own links here, and most cannot open the settings page (which used
+ * to be the only place that offered the link). The generated link pins this project, so a click on an
+ * external page - a fixed link - still lands here, while a page in another project lands there.
+ */
+async function showBookmarkletDialog(): Promise<void> {
+  const context = SDK.getExtensionContext();
+  const host = SDK.getHost();
+  const webContext = SDK.getWebContext();
+  const publisherId = (context && context.publisherId) || "f-steff";
+  const extensionId = (context && context.extensionId) || "static";
+  const org = host && host.name ? host.name : "";
+  const project = webContext && webContext.project ? webContext.project.name : "";
+  const target = org && project ? { org, project } : undefined;
+  const href = addLinkBookmarklet(publisherId, extensionId, target);
+
+  await infoDialog("Save any page as a private link", (body) => {
+    body.appendChild(
+      el(
+        "p",
+        undefined,
+        "A link can point at a page you are looking at - a build log, a dashboard, an external report - " +
+          "without leaving this hub first. The bookmarklet below does that in one click, and saves the " +
+          "link as one of your own: nobody else sees it until you share it."
+      )
+    );
+    body.appendChild(el("p", undefined, "Bookmark the link, then click that bookmark on any page:"));
+    const line = el("p");
+    const link = el("a", "bookmarklet", "Add to Static");
+    link.setAttribute("href", href);
+    link.setAttribute(
+      "title",
+      "Drag this to the bookmarks bar, or right-click it and choose 'Bookmark link'."
+    );
+    // A click inside the dialog would only run the bookmarklet on this page; it has to be a bookmark.
+    link.addEventListener("click", (event) => event.preventDefault());
+    line.appendChild(link);
+    body.appendChild(line);
+    body.appendChild(
+      el(
+        "p",
+        undefined,
+        "Drag it to the bookmarks bar, or right-click it and choose 'Bookmark link'. Clicking it here does nothing."
+      )
+    );
+    body.appendChild(
+      el(
+        "p",
+        undefined,
+        "The link is pinned to this project: a page outside Azure DevOps still lands here, and a page in " +
+          "another project lands there. The form arrives pre-filled and the builder matched, so only the " +
+          "title, slug and comment are left."
+      )
+    );
+  });
+}
+
+/** Saves the private link being edited (create or update). */
+async function onSavePrivate(draft: LinkDraft): Promise<void> {
+  try {
+    if (editingPrivateId) {
+      mine = await updatePrivateLink(editingPrivateId, {
+        title: draft.title,
+        url: draft.url,
+        comment: draft.comment,
+        dynamic: draft.dynamic,
+        area: draft.area,
+        updatedUtc: new Date().toISOString(),
+        // Editing clears a previous rejection: the message belongs to the old snapshot.
+        rejectedUtc: undefined
+      });
+    } else {
+      mine = await addPrivateLink(draft.title, draft.slug, draft.url, draft.comment, draft.dynamic, draft.area);
+    }
+    showList();
+  } catch (error) {
+    notice = describeError(error);
+    logError("Unable to save the private link.", error);
+    renderList(notice);
+  }
+}
+
+/** Deletes one private link. */
+async function deletePrivateLink(link: LinkEntry): Promise<void> {
+  const confirmed = await confirmDialog(
+    `Delete "${link.title}"? It is a private link, so this removes it for you only.`
+  );
+  if (!confirmed) {
+    return;
+  }
+  try {
+    mine = await deletePrivateLinks([link.linkId]);
+    // A proposal for a deleted link is withdrawn, so nobody is asked to review it.
+    const orphan = (proposals.proposals || []).find(
+      (proposal) => proposal.privateLinkId === link.linkId && proposal.state === "open"
+    );
+    if (orphan) {
+      proposals = await removeProposals([orphan.proposalId]);
+    }
+    notice = "";
+    renderList("");
+  } catch (error) {
+    notice = describeError(error);
+    logError("Unable to delete the private link.", error);
+    renderList(notice);
+  }
+}
+
+/** Offers a private link to the project as a proposed link (the reviewers see this snapshot). */
+async function sharePrivateLink(link: LinkEntry): Promise<void> {
+  if (link.proposal) {
+    // Already waiting for a decision - sharing again would only duplicate the record.
+    renderList(`"${link.title}" is already proposed to the project.`);
+    return;
+  }
+  if (slugTaken(index, [], link.slug)) {
+    renderList(
+      `The slug '${link.slug}' is already used by a project link, so this link cannot be offered as it is. ` +
+        "Edit it to use another slug, then share it."
+    );
+    return;
+  }
+  const confirmed = await confirmDialog(
+    `Share "${link.title}" with the project?\n\n` +
+      "The project settings page shows it as a proposed link, where anyone who can open those settings " +
+      "can add it to the project. The title, slug, URL and comment above are submitted; you keep your " +
+      "private copy until it is added."
+  );
+  if (!confirmed) {
+    return;
+  }
+  try {
+    const owner = currentUser();
+    const proposal = proposalFor(link, { id: owner.id, name: owner.name }, newPageId());
+    proposals = await putProposal(proposal);
+    mine = await updatePrivateLink(link.linkId, {
+      proposal: { proposalId: proposal.proposalId, proposedUtc: proposal.proposedUtc },
+      rejectedUtc: undefined
+    });
+    notice = `"${link.title}" was proposed to the project.`;
+    renderList(notice);
+  } catch (error) {
+    notice = describeError(error);
+    logError("Unable to propose the private link.", error);
+    renderList(notice);
+  }
+}
+
+/** The list of links (or the editor); the filter narrows the single merged table. */
+function renderList(message: string, loading = false): void {
   const root = document.getElementById("root");
   if (!root) {
     return;
   }
   root.innerHTML = "";
   document.title = "Static links";
+  if (message) {
+    notice = message;
+  }
 
   const page = el("div", "page");
   page.appendChild(getHeading("h1", "Static links", iconFor("links")));
-  page.appendChild(el("p", "subtitle", "Bookmarkable links into this project."));
-  if (notice) {
-    page.appendChild(el("p", "error", notice));
+  // The subtitle row carries the Bookmarklet button on the right. Members cannot open the settings
+  // page, so this hub is where they pick up the link that saves a page as their own private link.
+  const headerRow = el("div", "hub-header-row");
+  headerRow.appendChild(el("p", "subtitle", "Bookmarkable links into this project."));
+  // The controls sit together on the right: the pending-proposal pill (only for someone who can act
+  // on it) and the info button that hands out the bookmarklet.
+  const headerControls = el("div", "hub-header-controls");
+  const pending = pendingIndicator();
+  if (pending) {
+    headerControls.appendChild(pending);
   }
+  headerControls.appendChild(bookmarkletInfoButton());
+  headerRow.appendChild(headerControls);
+  page.appendChild(headerRow);
+  if (notice && view === "list") {
+    page.appendChild(el("p", "notice", notice));
+  }
+
+  if (view === "editor") {
+    page.appendChild(editorSection());
+  } else {
+    page.appendChild(linksSection(loading));
+    page.appendChild(addButton());
+  }
+
+  root.appendChild(page);
+  // The rows are filled in *after* the page is in the document: renderRows() looks the table up by
+  // id, and an element that is not attached yet cannot be found. (0.2.6 rendered the table empty for
+  // exactly that reason - the first paint's loading row is appended through a live reference, which
+  // is why only the loaded rows were missing.)
+  if (view === "list" && !loading) {
+    renderRows();
+  }
+  // Running version, centered at the bottom of the frame.
+  page.appendChild(el("p", "version", `Static ${version()}`));
+}
+
+/**
+ * The merged list: the project's links and the user's private links in one table.
+ * Rationale: one list with a Status column replaces two tables that repeated every column, and the
+ * private links (the ones a member can act on) are no longer pushed below the fold.
+ */
+function linksSection(loading: boolean): HTMLElement {
+  const section = el("div", "section");
+
+  // Filter over title, slug and comment - the same interaction as the Repos hub.
+  const toolbar = el("div", "toolbar");
+  const filterInput = document.createElement("input");
+  filterInput.type = "text";
+  filterInput.placeholder = "Filter links...";
+  filterInput.value = filter;
+  // Re-render only the rows as the user types; keeps focus in the filter box.
+  filterInput.addEventListener("input", () => {
+    filter = filterInput.value;
+    renderRows();
+  });
+  toolbar.appendChild(filterInput);
+  section.appendChild(toolbar);
 
   const table = el("table", "data-table");
   const head = el("thead");
   const headRow = el("tr");
-  ["Title", "Slug", "Area", "Comment"].forEach((label) =>
-    headRow.appendChild(el("th", undefined, label))
-  );
+  ["Title", "Slug", "Area", "Comment", "Status", "Actions"].forEach((label, index) => {
+    const cell = el("th", index >= 4 ? "col-right" : undefined, label);
+    headRow.appendChild(cell);
+  });
   head.appendChild(headRow);
   table.appendChild(head);
   const body = el("tbody");
+  body.id = "links-body";
   table.appendChild(body);
-  page.appendChild(table);
+  section.appendChild(table);
 
-  const links = (index.links || []).filter((link) => !link.hidden).slice().sort(byOrderThenTitle);
   if (loading) {
     // Shown only during the first paint, before data arrives (keeps the switch feeling instant).
     const row = el("tr");
     const cell = el("td", "empty", "Loading links...");
-    cell.colSpan = 4;
+    cell.colSpan = 6;
     row.appendChild(cell);
     body.appendChild(row);
-  } else if (links.length === 0) {
+  }
+  return section;
+}
+
+/** Renders the merged rows for the current filter (called on load and on every keystroke). */
+function renderRows(): void {
+  const body = document.getElementById("links-body");
+  if (!body) {
+    return;
+  }
+  body.innerHTML = "";
+  const rows = mergedRows(index, mine.links || [], filter);
+
+  if (rows.length === 0) {
     const row = el("tr");
-    const cell = el("td", "empty", "No links yet. Add them under Project settings -> Pages.");
-    cell.colSpan = 4;
+    const trimmed = filter.trim();
+    const message = trimmed
+      ? `No links match "${trimmed}".`
+      : emptyMessage();
+    const cell = el("td", "empty", message);
+    cell.colSpan = 6;
     row.appendChild(cell);
     body.appendChild(row);
-  } else {
-    links.forEach((link) => {
-      const row = el("tr");
-      const titleCell = el("td");
-      titleCell.appendChild(linkAnchor(link));
-      row.appendChild(titleCell);
-      row.appendChild(el("td", "mono", link.slug));
-      row.appendChild(el("td", "col-nowrap", areaLabel(link)));
-      row.appendChild(el("td", undefined, link.comment || ""));
-      body.appendChild(row);
-    });
+    return;
   }
 
-  root.appendChild(page);
-  // Running version, centered at the bottom of the frame.
-  page.appendChild(el("p", "version", `Static ${version()}`));
+  rows.forEach(({ link, status, mine: own }) => {
+    const row = el("tr");
+    const titleCell = el("td");
+    titleCell.appendChild(linkAnchor(link));
+    row.appendChild(titleCell);
+    row.appendChild(el("td", "mono", link.slug));
+    row.appendChild(el("td", "col-nowrap", areaLabel(link)));
+    row.appendChild(el("td", undefined, link.comment || ""));
+    row.appendChild(el("td", "col-right status", status));
+    row.appendChild(own ? actionCell(link) : el("td", "col-right"));
+    body.appendChild(row);
+  });
+}
+
+/** Edit / Delete / Share, kept together in a single cell so they stay on one row. */
+function actionCell(link: LinkEntry): HTMLElement {
+  // A flex wrapper inside the cell (rather than a flex cell) keeps the table's columns intact.
+  const cell = el("td", "col-right");
+  const box = el("div", "row-actions");
+  const edit = iconButton({ icon: ICON_EDIT, label: `Edit "${link.title}"`, onClick: () => showEditor(link) });
+  const remove = iconButton({
+    icon: ICON_DELETE,
+    label: `Delete "${link.title}"`,
+    onClick: () => void deletePrivateLink(link)
+  });
+  const proposed = Boolean(link.proposal);
+  // A rejected link is simply private again, so the tooltip is what says it was not accepted.
+  const rejected = Boolean(link.rejectedUtc) && !proposed;
+  const share = iconButton({
+    icon: ICON_SHARE,
+    label: proposed
+      ? `"${link.title}" is already proposed`
+      : rejected
+        ? `Share "${link.title}" with the project again (the last proposal was not accepted)`
+        : `Share "${link.title}" with the project`,
+    onClick: () => void sharePrivateLink(link),
+    disabled: proposed
+  });
+  box.appendChild(edit);
+  box.appendChild(remove);
+  box.appendChild(share);
+  cell.appendChild(box);
+  return cell;
+}
+
+/** The "Add private link" button (or a hint when the user may curate project links instead). */
+function addButton(): HTMLElement {
+  const wrap = el("div", "form-buttons");
+  const add = el("button", "primary");
+  add.type = "button";
+  add.title = "Create a link only you can see";
+  // The icon is our own markup, not user content.
+  add.innerHTML = `${ICON_ADD}<span>Add private link</span>`;
+  add.addEventListener("click", () => showEditor());
+  wrap.appendChild(add);
+  return wrap;
+}
+
+/** The editor view: the shared link form, plus what the buttons do. */
+function editorSection(): HTMLElement {
+  const section = el("div", "section");
+  section.appendChild(el("h2", undefined, editingPrivateId ? "Edit private link" : "Add private link"));
+  section.appendChild(
+    el(
+      "p",
+      "subtitle",
+      editingPrivateId
+        ? "This link is yours; saving keeps it private until you share it."
+        : "This link is visible only to you. You can share it with the project afterwards."
+    )
+  );
+  section.appendChild(linkEditor.buildForm());
+  return section;
 }
 
 /**
@@ -209,11 +709,6 @@ function linkHref(slug: string): string {
   return withQueryParam(`${pagesHubUrl(HUB_ID)}${encodeQuery(currentQuery)}`, "page", slug);
 }
 
-/** Sort key: explicit order first, then title. */
-function byOrderThenTitle(a: LinkEntry, b: LinkEntry): number {
-  return (a.order || 0) - (b.order || 0) || a.title.localeCompare(b.title);
-}
-
 /** The running extension version (shown at the bottom). */
 function version(): string {
   const context = SDK.getExtensionContext();
@@ -225,6 +720,18 @@ function areaLabel(link: LinkEntry): string {
   return linkAreaLabel(link.url, link.area);
 }
 
+/**
+ * Empty-state wording for the merged list.
+ * Rationale: "add them under Project settings" is wrong advice for a member who cannot open those
+ * settings, so the message follows the permission probe (and stays neutral when it is unknown).
+ */
+function emptyMessage(): string {
+  if (canOpenProjectSettings === false) {
+    return "No links yet. Ask a project administrator to add project links under Project settings -> Static -> Links, or add a private link.";
+  }
+  return "No links yet. Add a project link under Project settings -> Static -> Links, or add a private link.";
+}
+
 /** Renders a fatal error in place of the UI. */
 function renderFatal(error: unknown): void {
   const root = document.getElementById("root");
@@ -232,5 +739,7 @@ function renderFatal(error: unknown): void {
     return;
   }
   root.innerHTML = "";
-  root.appendChild(el("div", "page error", "Error: " + (error instanceof Error ? error.message : String(error))));
+  root.appendChild(
+    el("div", "page error", "Error: " + (describeError(error)))
+  );
 }

@@ -12,12 +12,12 @@ const rootDir = path.join(__dirname, "..");
 const binDir = path.join(rootDir, "node_modules", ".bin");
 const isWindows = process.platform === "win32";
 
-// Usage: node scripts/tfx.js <create|publish|share|unshare|show> <dev|stable>
-const commands = ["create", "publish", "share", "unshare", "show"];
+// Usage: node scripts/tfx.js <create|publish|validate|share|unshare|show> <dev|stable>
+const commands = ["create", "publish", "validate", "share", "unshare", "show"];
 const [command, configName] = process.argv.slice(2);
 
 if (!command || !configName || commands.indexOf(command) < 0) {
-  console.error("Usage: node scripts/tfx.js <create|publish|share|unshare|show> <dev|stable>");
+  console.error("Usage: node scripts/tfx.js <create|publish|validate|share|unshare|show> <dev|stable>");
   process.exit(1);
 }
 
@@ -52,6 +52,12 @@ const status = result.status || 0;
 // must increase". Treat the wait timeout as success (the watchdog still reports a real invalid).
 if (status !== 0 && /Validation is taking much longer than usual/i.test(`${result.stdout || ""}${result.stderr || ""}`)) {
   console.warn("Marketplace validation is still running; the upload succeeded, so this is not a failure.");
+  process.exit(0);
+}
+
+// The validation report is informational: it runs after the version was published and tagged, and a
+// Marketplace hiccup here must not fail the run (see Q19/D29 in docs/08).
+if (command === "validate") {
   process.exit(0);
 }
 
@@ -98,10 +104,31 @@ function buildArgs(command, manifestFile) {
       "--json"
     ]);
   }
+  if (command === "validate") {
+    // Reports the asynchronous Marketplace validation state for the version the merged manifest
+    // carries. Informational only: the publish and the tag are already done by the time it runs.
+    const manifest = readJson(manifestFile);
+    return appendToken([
+      "extension",
+      "isvalid",
+      "--publisher",
+      manifest.publisher,
+      "--extension-id",
+      manifest.id,
+      "--version",
+      manifest.version,
+      "--service-url",
+      "https://marketplace.visualstudio.com/"
+    ]);
+  }
   const args = ["extension", command === "create" ? "create" : "publish", "--manifests", manifestFile];
   // Publish-only extras come from the environment so no secrets live in the repo.
   if (command === "publish") {
     orgList(process.env.ADO_SHARE_WITH).forEach((org) => args.push("--share-with", org));
+    // Rationale: `--no-wait-validation` makes the publish return as soon as the upload is accepted, so
+    // the version tag depends only on the upload. Waiting made the tag hostage to a status poll that
+    // once failed with a transient 503 and left a published version untagged (Q19/D29).
+    args.push("--no-wait-validation");
   }
   return appendToken(args);
 }
@@ -111,11 +138,17 @@ function orgList(value) {
   return (value || "").split(/[\s,]+/).filter(Boolean);
 }
 
-/** Appends the Marketplace token when the environment provides one. */
+/**
+ * Appends the publishing token when the environment provides one.
+ *
+ * Rationale: `--auth-type pat` is what tfx wants for a Marketplace PAT *and* for a Microsoft Entra
+ * access token - the documented way to publish without a PAT - so one flag covers both. The token
+ * arrives in TFS_PAT either way (the workflows put the OIDC token there).
+ */
 function appendToken(args) {
   const token = process.env.TFS_PAT;
   if (token) {
-    args.push("--token", token);
+    args.push("--auth-type", "pat", "--token", token);
   }
   return args;
 }

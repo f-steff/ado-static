@@ -32,6 +32,7 @@ repositories. Content and links can be published straight from a pipeline.
 | [13-test-plan.md](13-test-plan.md) | Repeatable per-version test plan and results log. |
 | [14-ado-urls.md](14-ado-urls.md) | Catalog of every in-project Azure DevOps URL shape; the parser test corpus. |
 | [15-ado-other-areas.md](15-ado-other-areas.md) | Wiki/Dashboards/Boards/Test Plans/Artifacts/Environments/Releases: URLs and integration notes. |
+| [16-development-setup.md](16-development-setup.md) | Building, packaging and publishing, and the development program. |
 
 ## Glossary
 

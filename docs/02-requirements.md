@@ -30,6 +30,7 @@ constraint that shapes the requirement (see [05-navigation-and-urls.md](05-navig
 | FR-ADM-10 | Deleting a page or link moves it to a shared **Trash** where it can be **restored** or **deleted instantly**; trashed slugs stay reserved and entries are purged after **5 days**. |
 | FR-ADM-11 | Administrators can add/edit/delete **links** (Title, unique slug, URL, comment) using a cascading builder. |
 | FR-ADM-12 | The Trash table shows a **Permanent delete by** column (`deletedUtc` + 5 days). |
+| FR-ADM-13 | The settings page accepts `?url=<page URL>` and pre-fills the **project** link form with it. Only absolute `http(s)` URLs are accepted, and the value is neither logged nor stored unless the link is saved. The About tab's bookmarklet does not use this page - it targets the Links hub so the link is private (FR-LINK-8). |
 
 ### Content & publishing
 
@@ -65,6 +66,8 @@ constraint that shapes the requirement (see [05-navigation-and-urls.md](05-navig
 | FR-LINK-5 | A link may be **dynamic**: its URL carries `{{dyn}}` and a spec (latest / latest-succeeded / latest-failed build; newest/oldest open PR; latest commit on a branch) resolved when the link is opened. |
 | FR-LINK-6 | A dynamic build link may also target a **log** location, stored **by name** (`{{stage}}`/`{{job}}`/`{{task}}`) and resolved against the build at open time; a missing target shows a clear message. |
 | FR-LINK-7 | The Area column shows a short category: **Repo**, **PR**, **Pipeline**, **Artifact**, **Fixed**. |
+| FR-LINK-8 | The Links hub shows an **info** button (a circled i) beside its subtitle; it opens a dialog that explains the bookmarklet and offers a draggable link (right-click -> Bookmark link) built for the installed edition and pinned to this project. The hub accepts `?url=<page URL>` and opens the **private-link** editor pre-filled. A page inside a project uses that project; any other page (a fixed link, an organization page) uses the pinned project. A click outside the dialog or Escape closes it. Only absolute `http(s)` URLs are accepted. |
+| FR-LINK-9 | The Links hub shows a red pending-proposal indicator with the number of **all** proposed links in the project to a caller who can open the project settings page; it opens that page, where the proposals are accepted or rejected. An unknown permission keeps it visible (D27), and it disappears when no proposal is left. |
 
 ### PR hub
 

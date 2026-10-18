@@ -20,10 +20,12 @@ import {
     tokenizeUrl,
 } from "../src/common/dynamic-links";
 import { filterByName, matchesFilter } from "../src/common/filter";
+import { findActionBit, readPermissionValue } from "../src/common/permission-parse";
 import { buildViewSpecs, composePath, consumedParams, isFixedArea, targetMatches, viewKeyForValue } from "../src/common/builder-core";
 import { buildBundle, backupFileName, decodeBundle, encodeBundle, parseBundle } from "../src/common/backup";
 import { crc32, readZip, writeZip } from "../src/common/zip";
-import { fixedUrlError, isHttpUrl, linkAreaLabel } from "../src/common/link-url";
+import { acceptablePrefillUrl, addLinkBookmarklet, fixedUrlError, isHttpUrl, linkAreaLabel } from "../src/common/link-url";
+import { describeError } from "../src/common/log";
 import { isValidPullRequestId, pullRequestWebUrl } from "../src/common/pr-url";
 import { formatBytes, formatBytesWhole, formatRelativeTime } from "../src/common/format";
 import {
@@ -47,7 +49,8 @@ import {
     withQueryParam
 } from "../src/common/urls";
 import { featureStateUrl, slugError, slugify } from "../src/common/validation";
-import type { PageIndex, PageMetadata, TrashEntry } from "../src/common/data-service";
+import { byOrderThenTitle, acceptanceError, mergedRows, pendingLabel, proposalFor, promotionFields, reconcile, slugTaken } from "../src/common/private-links";
+import type { LinkEntry, LinkIndex, LinkProposal, PageIndex, PageMetadata, TrashEntry } from "../src/common/data-service";
 
 /** Builds a page with sensible defaults so tests can override only what they assert. */
 function makePage(overrides: Partial<PageMetadata> = {}): PageMetadata {
@@ -820,4 +823,386 @@ test("formatRelativeTime formats coarse all-time ages", () => {
     assert.equal(formatRelativeTime(ago(60 * 24 * 60 * 60 * 1000), now), "2 mo ago");
     // A future timestamp (clock skew) is clamped rather than shown as negative.
     assert.equal(formatRelativeTime(new Date(now + 60000).toISOString(), now), "just now");
+});
+
+// ---- Permission probes (PR: permission-aware visibility) ------------------------------------
+
+test("readPermissionValue reads every response shape the Security API returns", () => {
+    // Azure DevOps wraps the array in `{ count, value }`; the reference documents a bare array.
+    assert.equal(readPermissionValue({ count: 1, value: [true] }), true);
+    assert.equal(readPermissionValue({ count: 1, value: [false] }), false);
+    assert.equal(readPermissionValue([true]), true);
+    assert.equal(readPermissionValue(true), true);
+    // Anything unexpected is "unknown" (null) rather than a wrong answer.
+    assert.equal(readPermissionValue({ value: [] }), null);
+    assert.equal(readPermissionValue({ value: ["yes"] }), null);
+    assert.equal(readPermissionValue(undefined), null);
+    assert.equal(readPermissionValue(null), null);
+    assert.equal(readPermissionValue("true"), null);
+});
+
+test("findActionBit locates a namespace action by name, case-insensitively", () => {
+    const definition = {
+        actions: [
+            { name: "GenericRead", bit: 1, displayName: "View" },
+            { name: "MANAGE_PROPERTIES", bit: 16 }
+        ]
+    };
+    assert.equal(findActionBit(definition, "manage_properties"), 16);
+    assert.equal(findActionBit(definition, "GenericRead"), 1);
+    assert.equal(findActionBit(definition, "delete"), null);
+    // A malformed definition must not throw; the probe then reports "unknown".
+    assert.equal(findActionBit(null, "x"), null);
+    assert.equal(findActionBit({}, "x"), null);
+    assert.equal(findActionBit({ actions: [{ name: "x" }] }, "x"), null);
+    assert.equal(findActionBit({ actions: "nope" }, "x"), null);
+});
+
+// ---- Private links and proposals (PR: private links + proposals) ---------------------------
+
+/** Builds a link entry with defaults so tests only state what they assert. */
+function makeLink(overrides: Partial<LinkEntry> = {}): LinkEntry {
+    return {
+        linkId: "l1", slug: "a-link", title: "A link", url: "https://dev.azure.com/contoso/SampleProject",
+        comment: "", order: 0, enabled: true, hidden: false, updatedUtc: "", updatedBy: "",
+        ...overrides
+    };
+}
+
+const ORG = "contoso";
+const PROJECT = "SampleProject";
+const PROJECT_ID = "00001111-aaaa-2222-bbbb-3333cccc4444";
+const IN_PROJECT = `https://dev.azure.com/${ORG}/${PROJECT}/_git/repo`;
+const OUT_OF_PROJECT = "https://dev.azure.com/contoso/OtherProject/_git/repo";
+
+test("slugTaken reserves project links (live and trashed) as well as my own", () => {
+    const project = makeIndex([]) as unknown as LinkIndex;
+    const live = makeLink({ slug: "project-link" });
+    const trashed = makeLink({ linkId: "l2", slug: "trashed-link" });
+    const index: LinkIndex = {
+        id: "links", kind: "links", schemaVersion: 1, revision: 0,
+        links: [live], trash: [{ trashId: "t1", deletedUtc: "", deletedBy: "", link: trashed }]
+    };
+    const mine = [makeLink({ linkId: "p1", slug: "my-link" })];
+
+    assert.equal(slugTaken(index, mine, "project-link"), true);
+    // Case-insensitive, and trashed entries still reserve their slug.
+    assert.equal(slugTaken(index, mine, "PROJECT-Link"), true);
+    assert.equal(slugTaken(index, mine, "trashed-link"), true);
+    assert.equal(slugTaken(index, mine, "my-link"), true);
+    assert.equal(slugTaken(index, mine, "free"), false);
+    // An empty slug is the caller's business (the slug validator reports it).
+    assert.equal(slugTaken(index, mine, "   "), false);
+    // Editing a link keeps its own slug available.
+    assert.equal(slugTaken(index, mine, "my-link", "my-link"), false);
+    // A project link is missing while the private store still loads: only its own links count.
+    assert.equal(slugTaken(null, mine, "my-link"), true);
+    assert.equal(slugTaken(project, mine, "free"), false);
+});
+
+test("proposalFor freezes a snapshot and records the owner", () => {
+    const link = makeLink({
+        linkId: "p1", slug: "my-report", title: "My report", comment: "why",
+        url: "https://dev.azure.com/contoso/SampleProject/_build/results?buildId=42",
+        area: "build", dynamic: { kind: "build", buildMode: "fixed" }
+    });
+    const proposal = proposalFor(link, { id: "u1", name: "Sam" }, "prop1", new Date("2026-10-15T09:00:00Z"));
+
+    assert.equal(proposal.proposalId, "prop1");
+    assert.equal(proposal.privateLinkId, "p1");
+    assert.equal(proposal.state, "open");
+    assert.equal(proposal.slug, "my-report");
+    assert.equal(proposal.title, "My report");
+    assert.equal(proposal.comment, "why");
+    assert.equal(proposal.proposedById, "u1");
+    assert.equal(proposal.proposedByName, "Sam");
+    assert.equal(proposal.proposedUtc, "2026-10-15T09:00:00.000Z");
+    assert.deepEqual(proposal.dynamic, { kind: "build", buildMode: "fixed" });
+    assert.equal(proposal.area, "build");
+    // Optional fields are omitted rather than stored as undefined.
+    const plain = proposalFor(makeLink(), { id: "u1", name: "Sam" }, "prop2");
+    assert.equal("dynamic" in plain, false);
+    assert.equal("area" in plain, false);
+});
+
+test("promotionFields hands the link to the project and credits the proposer", () => {
+    const proposal = proposalFor(
+        makeLink({ slug: "my-report", title: "My report", area: "fixed", dynamic: { kind: "build", buildMode: "latest" } }),
+        { id: "u1", name: "Sam" },
+        "prop1"
+    );
+    const fields = promotionFields(proposal, "Ada", new Date("2026-10-15T10:00:00Z"));
+    assert.equal(fields.slug, "my-report");
+    assert.equal(fields.title, "My report");
+    assert.equal(fields.proposedBy, "Sam");
+    assert.equal(fields.enabled, true);
+    assert.equal(fields.hidden, false);
+    assert.equal(fields.updatedBy, "Ada");
+    assert.equal(fields.updatedUtc, "2026-10-15T10:00:00.000Z");
+    assert.deepEqual(fields.dynamic, { kind: "build", buildMode: "latest" });
+});
+
+test("acceptanceError re-checks the slug and the URL shape", () => {
+    const open = proposalFor(makeLink({ slug: "my-report", url: IN_PROJECT, area: undefined }), { id: "u1", name: "Sam" }, "prop1");
+    assert.equal(acceptanceError(open, null, ORG, PROJECT, PROJECT_ID), "");
+    // A project link took the slug in the meantime.
+    const taken: LinkIndex = {
+        id: "links", kind: "links", schemaVersion: 1, revision: 0,
+        links: [makeLink({ slug: "MY-REPORT" })], trash: []
+    };
+    assert.match(acceptanceError(open, taken, ORG, PROJECT, PROJECT_ID), /already used/);
+    // A fixed proposal may point anywhere http(s).
+    const fixed = { ...open, area: "fixed", url: "https://example.com/report" };
+    assert.equal(acceptanceError(fixed, null, ORG, PROJECT, PROJECT_ID), "");
+    assert.notEqual(acceptanceError({ ...fixed, url: "javascript:alert(1)" }, null, ORG, PROJECT, PROJECT_ID), "");
+    // An in-project proposal must still address this project.
+    assert.notEqual(acceptanceError({ ...open, url: OUT_OF_PROJECT }, null, ORG, PROJECT, PROJECT_ID), "");
+    assert.notEqual(acceptanceError({ ...open, url: "" }, null, ORG, PROJECT, PROJECT_ID), "");
+});
+
+test("reconcile keeps open proposals, promotes accepted ones and returns rejected ones", () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const openLink = makeLink({ linkId: "p-open", slug: "open", proposal: { proposalId: "prop-open", proposedUtc: "x" } });
+    const accepted = makeLink({ linkId: "p-acc", slug: "acc", proposal: { proposalId: "prop-acc", proposedUtc: "x" } });
+    const rejected = makeLink({ linkId: "p-rej", slug: "rej", proposal: { proposalId: "prop-rej", proposedUtc: "x" } });
+    const plain = makeLink({ linkId: "p-plain", slug: "plain" });
+    const stale = makeLink({ linkId: "p-stale", slug: "stale", proposal: { proposalId: "prop-gone", proposedUtc: "x" } });
+
+    const proposals: LinkProposal[] = [
+        { proposalId: "prop-open", privateLinkId: "p-open", slug: "open", title: "t", url: "", comment: "", proposedById: "u1", proposedByName: "Sam", proposedUtc: "x", state: "open" },
+        { proposalId: "prop-acc", privateLinkId: "p-acc", slug: "acc", title: "t", url: "", comment: "", proposedById: "u1", proposedByName: "Sam", proposedUtc: "x", state: "accepted", decidedUtc: "2026-10-15T11:00:00Z", decidedBy: "Ada" },
+        { proposalId: "prop-rej", privateLinkId: "p-rej", slug: "rej", title: "t", url: "", comment: "", proposedById: "u1", proposedByName: "Sam", proposedUtc: "x", state: "rejected", decidedUtc: "2026-10-15T11:30:00Z", decidedBy: "Ada" },
+        // Somebody else's proposal must not be touched or withdrawn.
+        { proposalId: "prop-other", privateLinkId: "p-other", slug: "other", title: "t", url: "", comment: "", proposedById: "u2", proposedByName: "Kim", proposedUtc: "x", state: "open" }
+    ];
+
+    const plan = reconcile([openLink, accepted, rejected, plain, stale], proposals, "u1", now);
+    const slugs = plan.links.map((link) => link.slug).sort();
+    assert.deepEqual(slugs, ["open", "plain", "rej", "stale"]);
+    // Promotion removes the private original; the decided records go with it (a record that does not
+    // exist is nothing to remove - that is the "already applied on another device" case).
+    assert.deepEqual(plan.removeLinkIds, ["p-acc"]);
+    assert.deepEqual(plan.removeProposalIds.sort(), ["prop-acc", "prop-rej"]);
+    assert.equal(plan.changed, true);
+    // Rejected keeps the link with a marker, and the marker is dropped once the record is decided.
+    const keptRejected = plan.links.find((link) => link.slug === "rej")!;
+    assert.equal(keptRejected.rejectedUtc, "2026-10-15T11:30:00Z");
+    assert.equal("proposal" in keptRejected, false);
+    // A missing record means the decision was already applied (another device): forget the marker.
+    const keptStale = plan.links.find((link) => link.slug === "stale")!;
+    assert.equal("proposal" in keptStale, false);
+    // An untouched link keeps its proposal reference.
+    const keptOpen = plan.links.find((link) => link.slug === "open")!;
+    assert.equal(keptOpen.proposal!.proposalId, "prop-open");
+    // A still-open proposal belongs to somebody else and survives even without a private link here.
+    assert.equal(plan.removeProposalIds.includes("prop-other"), false);
+});
+
+test("reconcile reports no change when nothing is proposed", () => {
+    const plan = reconcile([makeLink({ linkId: "p1" })], [], "u1");
+    assert.equal(plan.changed, false);
+    assert.deepEqual(plan.removeLinkIds, []);
+    assert.deepEqual(plan.removeProposalIds, []);
+    assert.equal(plan.links.length, 1);
+});
+
+test("byOrderThenTitle sorts private links by order, then title", () => {
+    const items = [makeLink({ slug: "c", title: "Charlie", order: 2 }), makeLink({ slug: "b", title: "Bravo", order: 0 }), makeLink({ slug: "a", title: "Alpha", order: 0 })];
+    assert.deepEqual(items.slice().sort(byOrderThenTitle).map((link) => link.slug), ["a", "b", "c"]);
+});
+
+// ---- Merged Links hub list (one table with a Status column) ---------------------------------
+
+test("mergedRows merges project and private links, hides hidden ones and sorts by title", () => {
+    const project: LinkIndex = {
+        id: "links", kind: "links", schemaVersion: 1, revision: 0,
+        links: [
+            makeLink({ linkId: "a", slug: "build-log", title: "Build log", comment: "latest run" }),
+            makeLink({ linkId: "b", slug: "hidden-one", title: "Hidden one", hidden: true }),
+            makeLink({ linkId: "c", slug: "docs", title: "Documentation" })
+        ],
+        trash: []
+    };
+    const mine = [
+        makeLink({ linkId: "p1", slug: "my-report", title: "My report", comment: "mine" }),
+        makeLink({ linkId: "p2", slug: "pending-one", title: "Pending one", proposal: { proposalId: "x", proposedUtc: "t" } })
+    ];
+    const rows = mergedRows(project, mine, "");
+
+    // Alphabetical by title, both groups mixed; a hidden project link is not listed.
+    assert.deepEqual(rows.map((row) => row.link.title), ["Build log", "Documentation", "My report", "Pending one"]);
+    assert.deepEqual(rows.map((row) => row.status), ["project", "project", "private", "pending"]);
+    // Only the user's own links carry actions.
+    assert.deepEqual(rows.map((row) => row.mine), [false, false, true, true]);
+});
+
+test("mergedRows filters on title, slug and comment, case-insensitively", () => {
+    const project: LinkIndex = {
+        id: "links", kind: "links", schemaVersion: 1, revision: 0,
+        links: [
+            makeLink({ linkId: "a", slug: "build-log", title: "Build log", comment: "latest run" }),
+            makeLink({ linkId: "c", slug: "docs", title: "Documentation" })
+        ],
+        trash: []
+    };
+    const mine = [makeLink({ linkId: "p1", slug: "my-report", title: "My report", comment: "nightly numbers" })];
+
+    assert.deepEqual(mergedRows(project, mine, "BUILD").map((row) => row.link.slug), ["build-log"]);
+    assert.deepEqual(mergedRows(project, mine, "docs").map((row) => row.link.slug), ["docs"]);
+    // A match in the comment counts too.
+    assert.deepEqual(mergedRows(project, mine, "nightly").map((row) => row.link.slug), ["my-report"]);
+    // No match, and the empty filter returns everything.
+    assert.deepEqual(mergedRows(project, mine, "zzz"), []);
+    assert.equal(mergedRows(project, mine, "   ").length, 3);
+    // A rejected private link is simply private again.
+    const rejected = [makeLink({ linkId: "p2", slug: "nope", title: "Nope", rejectedUtc: "t" })];
+    assert.deepEqual(mergedRows(null, rejected, "").map((row) => row.status), ["private"]);
+    // No data at all is not an error.
+    assert.deepEqual(mergedRows(null, [], ""), []);
+});
+
+// Regression (B10): the Security REST API wraps the namespace definition, and looking only at the top
+// level made every permission probe answer "unknown" - which fail-safely left every permission-aware
+// control visible, so the feature was inert without ever failing a test.
+test("findActionBit unwraps the namespace definition the REST API returns", () => {
+    const wrapped = {
+        count: 1,
+        value: [{ namespaceId: "52d39943-cb85-4d7f-8fa8-c6baac873819", name: "Project", actions: [{ name: "GENERIC_READ", bit: 1 }, { name: "MANAGE_PROPERTIES", bit: 16 }] }]
+    };
+    assert.equal(findActionBit(wrapped, "MANAGE_PROPERTIES"), 16);
+    assert.equal(findActionBit(wrapped, "generic_read"), 1);
+    assert.equal(findActionBit(wrapped, "missing"), null);
+    // Empty or malformed wrappers stay "unknown" rather than guessing.
+    assert.equal(findActionBit({ count: 0, value: [] }, "MANAGE_PROPERTIES"), null);
+    assert.equal(findActionBit({ count: 1, value: [null] }, "MANAGE_PROPERTIES"), null);
+    assert.equal(findActionBit({ count: 1, value: [{ name: "Project" }] }, "MANAGE_PROPERTIES"), null);
+    assert.equal(findActionBit({ count: 1, value: "nope" }, "MANAGE_PROPERTIES"), null);
+});
+
+// ---- Link form pre-fill from the address bar (bookmarklet) ---------------------------------
+
+test("acceptablePrefillUrl accepts only absolute http(s) URLs within the length cap", () => {
+    assert.equal(acceptablePrefillUrl("https://dev.azure.com/contoso/SampleProject/_build/results?buildId=1"), "https://dev.azure.com/contoso/SampleProject/_build/results?buildId=1");
+    assert.equal(acceptablePrefillUrl("  http://example.com/report  "), "http://example.com/report");
+    // Anything that is not a plain http(s) URL is ignored, so a crafted query cannot inject a target.
+    assert.equal(acceptablePrefillUrl("javascript:alert(1)"), "");
+    assert.equal(acceptablePrefillUrl("data:text/html,<script>alert(1)</script>"), "");
+    assert.equal(acceptablePrefillUrl("file:///c:/secret.txt"), "");
+    assert.equal(acceptablePrefillUrl("not a url"), "");
+    assert.equal(acceptablePrefillUrl(""), "");
+    assert.equal(acceptablePrefillUrl("   "), "");
+    // Defensive: the value arrives from a query string, so it may be a non-string.
+    assert.equal(acceptablePrefillUrl(undefined), "");
+    assert.equal(acceptablePrefillUrl(null), "");
+    assert.equal(acceptablePrefillUrl(["https://example.com"]), "");
+    assert.equal(acceptablePrefillUrl(42), "");
+    // A pathological length is refused rather than echoed into the form.
+    assert.equal(acceptablePrefillUrl("https://example.com/" + "a".repeat(2100)), "");
+});
+
+// ---- The About tab's add-to-Static bookmarklet (FR-ADM-13) ---------------------------------
+
+test("addLinkBookmarklet builds a self-contained bookmarklet for the installed edition", () => {
+    const stable = addLinkBookmarklet("f-steff", "static");
+    assert.ok(stable.startsWith("javascript:("));
+    // The Links hub owns the private-link form, which is what the bookmarklet must open.
+    assert.ok(stable.includes("/_apps/hub/f-steff.static.static-links-hub?url="));
+    // The development edition differs only by its extension id, which is why the id is a parameter.
+    assert.ok(addLinkBookmarklet("f-steff", "static-dev").includes("/_apps/hub/f-steff.static-dev.static-links-hub?url="));
+    // Defensive: an unavailable SDK context falls back to the released ids.
+    assert.equal(addLinkBookmarklet("", ""), stable);
+    // Pinned so the code block in docs/07 cannot drift from what the extension generates.
+    assert.equal(
+        stable,
+        "javascript:(()=>{const s=location.pathname.split('/').filter(Boolean);const a=/\\.visualstudio\\.com$/.test(location.host);const d=location.host==='dev.azure.com';const o=a?location.host.split('.')[0]:s[0];const p=a?s[0]:(d?s[1]:undefined);const t=p&&p[0]!=='_'?{o:o,p:p}:null;if(!t)return;location.href='https://dev.azure.com/'+t.o+'/'+t.p+'/_apps/hub/f-steff.static.static-links-hub?url='+encodeURIComponent(location.href)})()"
+    );
+});
+
+test("addLinkBookmarklet hands the current page URL to the Links hub", () => {
+    // Run the bookmarklet body with a fake `location`, exactly as a browser would on that page.
+    const run = (href: string, pathname: string, host: string, current: string) => {
+        const fake = { pathname, host, href: current };
+        new Function("location", href.slice("javascript:".length))(fake);
+        return fake.href;
+    };
+    const hub = "https://dev.azure.com/contoso/SampleProject/_apps/hub/f-steff.static.static-links-hub?url=";
+    const page = "https://dev.azure.com/contoso/SampleProject/_build/results?buildId=42&view=logs";
+    assert.equal(
+        run(addLinkBookmarklet("f-steff", "static"), "/contoso/SampleProject/_build/results", "dev.azure.com", page),
+        hub + encodeURIComponent(page)
+    );
+    // Path segments are already encoded, so a project name with a space must not be encoded twice.
+    const spaced = "https://dev.azure.com/contoso/My%20Project/_build";
+    assert.equal(
+        run(addLinkBookmarklet("f-steff", "static"), "/contoso/My%20Project/_build", "dev.azure.com", spaced),
+        "https://dev.azure.com/contoso/My%20Project/_apps/hub/f-steff.static.static-links-hub?url=" + encodeURIComponent(spaced)
+    );
+    // On the legacy host the organization is in the host name, so the first segment is the project.
+    const legacy = "https://contoso.visualstudio.com/SampleProject/_build";
+    assert.equal(
+        run(addLinkBookmarklet("f-steff", "static"), "/SampleProject/_build", "contoso.visualstudio.com", legacy),
+        hub + encodeURIComponent(legacy)
+    );
+    // Outside a project (the organization home) there is nothing to add, so the page is left alone.
+    const home = "https://dev.azure.com/contoso/";
+    assert.equal(run(addLinkBookmarklet("f-steff", "static"), "/contoso/", "dev.azure.com", home), home);
+    // Without a pinned project, an external page has no project either, so it is left alone too.
+    const external = "https://example.com/report";
+    assert.equal(run(addLinkBookmarklet("f-steff", "static"), "/report", "example.com", external), external);
+    // An organization page ('_' segment) is not a project, so it must not be mistaken for one.
+    const orgPage = "https://dev.azure.com/contoso/_settings";
+    assert.equal(run(addLinkBookmarklet("f-steff", "static"), "/contoso/_settings", "dev.azure.com", orgPage), orgPage);
+});
+
+test("addLinkBookmarklet pins a fallback project so a fixed link lands in the right project", () => {
+    const href = addLinkBookmarklet("f-steff", "static", { org: "contoso", project: "SampleProject" });
+    // The pinned ids are embedded, encoded once.
+    assert.ok(href.includes('{o:"contoso",p:"SampleProject"}'));
+    const run = (pathname: string, host: string, current: string) => {
+        const fake = { pathname, host, href: current };
+        new Function("location", href.slice("javascript:".length))(fake);
+        return fake.href;
+    };
+    const hub = "https://dev.azure.com/contoso/SampleProject/_apps/hub/f-steff.static.static-links-hub?url=";
+    // A fixed link: the page is external and has no project, so the pinned project is used.
+    const external = "https://example.com/reports/coverage.html";
+    assert.equal(run("/reports/coverage.html", "example.com", external), hub + encodeURIComponent(external));
+    // A page inside another project keeps that project.
+    const other = "https://dev.azure.com/contoso/OtherProject/_build/results";
+    assert.equal(
+        run("/contoso/OtherProject/_build/results", "dev.azure.com", other),
+        "https://dev.azure.com/contoso/OtherProject/_apps/hub/f-steff.static.static-links-hub?url=" + encodeURIComponent(other)
+    );
+    // An organization page ('_' segment) is not a project, so the pinned one is used.
+    const orgPage = "https://dev.azure.com/contoso/_settings";
+    assert.equal(run("/contoso/_settings", "dev.azure.com", orgPage), hub + encodeURIComponent(orgPage));
+    // A project name with a space is encoded once (a space becomes %20, not %2520).
+    assert.ok(addLinkBookmarklet("f-steff", "static", { org: "contoso", project: "My Project" }).includes('{o:"contoso",p:"My%20Project"}'));
+});
+
+// ---- Error reporting (B11) ------------------------------------------------------------------
+
+test("pendingLabel reports the number of proposals waiting for a decision", () => {
+    assert.equal(pendingLabel(1), "1 pending");
+    assert.equal(pendingLabel(2), "2 pending");
+    assert.equal(pendingLabel(0), "0 pending");
+});
+
+test("describeError turns non-Error rejections into something readable", () => {
+    assert.equal(describeError(new Error("plain failure")), "plain failure");
+    assert.equal(describeError("a string"), "a string");
+    // The Extension Data SDK's shape.
+    assert.equal(describeError({ name: "AccessCheckException", message: "denied" }), "AccessCheckException: denied");
+    // The REST client's TFS.WebApi.Exception: it has no `message`, only a JSON `responseText`.
+    assert.equal(
+        describeError({ name: "TFS.WebApi.Exception", status: 401, responseText: JSON.stringify({ message: "TF400813: no access" }) }),
+        "TFS.WebApi.Exception: TF400813: no access"
+    );
+    // Without a parsable body, the name and the status still beat "[object Object]".
+    assert.equal(describeError({ name: "TFS.WebApi.Exception", status: 401 }), "TFS.WebApi.Exception HTTP 401");
+    // A non-JSON body is surfaced as-is (bounded).
+    assert.equal(describeError({ responseText: "Bad gateway" }), "Bad gateway");
+    // Anything at all still prints.
+    assert.equal(describeError(42), "42");
+    assert.equal(describeError(null), "null");
 });

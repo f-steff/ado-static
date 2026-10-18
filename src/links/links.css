@@ -47,6 +47,49 @@ h1 {
     margin: 4px 0 16px;
 }
 
+/* Subtitle row: the text on the left, the Bookmarklet button on the right. */
+.hub-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 4px 0 16px;
+}
+
+.hub-header-row .subtitle {
+    margin: 0;
+}
+
+/* Right-hand side of the subtitle row: the pending pill and the info button. */
+.hub-header-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Pending-proposal pill: shown only to a caller who can act on the proposal, so it reads as a call to
+   action rather than a status badge for everybody. */
+.pending-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 10px;
+    border: 1px solid #d13438;
+    border-radius: 12px;
+    background: #fde7e9;
+    color: #a4262c;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.pending-indicator:hover {
+    background: #f3c8cc;
+}
+
+.pending-indicator-icon {
+    display: inline-flex;
+}
+
 table.data-table {
     width: 100%;
     border-collapse: collapse;
@@ -99,6 +142,102 @@ table.data-table tbody tr:hover {
     font-size: 11px;
     text-align: center;
     margin: 24px 0 0;
+}
+
+/* Filter row above the table (same interaction as the Repos hub). */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.toolbar input[type="text"] {
+    min-width: 260px;
+}
+
+/*
+ * Status and Actions sit at the right edge and take only the width their content needs:
+ * `width: 1%` lets the browser shrink them to fit, so the four data columns absorb the rest.
+ */
+table.data-table th.col-right,
+table.data-table td.col-right {
+    text-align: right;
+    white-space: nowrap;
+    width: 1%;
+}
+
+/* Section card: gives each table its own boundary (project links, then private links). */
+.section {
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 8px;
+}
+
+/* Row-action cell: the three icon buttons must stay on one row. */
+td .row-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* Icon buttons (Edit / Delete / Share) are compact and inherit the theme colour. */
+button.icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 26px;
+    padding: 0;
+    color: var(--text-primary-color, #201f1e);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+}
+
+button.icon-button:hover:not(:disabled) {
+    background: rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+    border-color: rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+}
+
+button.icon-button:disabled {
+    color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
+}
+
+/* The Add button carries a small icon before its label. */
+button.primary svg {
+    margin-right: 6px;
+    vertical-align: -1px;
+}
+
+button.primary {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Informational message above the tables (a share or an error). */
+.notice {
+    color: var(--text-secondary-color, #605e5c);
+    background: rgba(var(--palette-neutral-4, 244, 244, 244), 1);
+    border: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin: 0 0 12px;
+}
+
+.status {
+    font-size: 12px;
+    color: var(--text-secondary-color, #605e5c);
 }
 
 .error {

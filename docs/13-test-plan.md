@@ -30,6 +30,8 @@ not applicable, **MAN** = requires a human mouse (cross-origin iframe clicks can
 - Test projects: `SampleProject` (has pages/pipelines) and an empty project (for isolation checks).
 - The `sandbox` repo pipeline uses the task alias `PublishPage@0`.
 - A project-collection administrator account (for Project and Organization settings).
+- A **non-administrator** project member account: the negative half of the permission probes (Q17,
+  TC-83/TC-84) and, later, the private-link isolation checks can only be run with one.
 - Debug browser running (`chrome-live`), exactly one tab.
 
 ## Connections that must be exercised
@@ -65,6 +67,14 @@ pure logic that previously had to be checked by hand:
 | AT-11 | URL helpers | `withQueryParam` insert/replace/remove while preserving others; hub/settings URL shapes | TC-16, TC-31 |
 | AT-12 | Filter | case-insensitive substring; input order preserved | TC-14, TC-15 |
 | AT-13 | Relative time | coarse ages; future timestamps clamped | TC-14 |
+| AT-14 | Permission payloads | `{count,value}` and bare-array responses; action lookup by name; malformed input -> `null` (unknown) | TC-83, TC-84 |
+| AT-15 | Private links | slug reservation across project + own links; proposal snapshot; promotion fields; acceptance guard (taken slug, bad URL) | TC-85, TC-88 |
+| AT-16 | Proposal reconciliation | open keeps its marker, accepted removes the private original, rejected marks it, a missing record is forgotten, an orphaned proposal is withdrawn, other members' proposals are untouched | TC-87..TC-89 |
+| AT-17 | Merged Links list | project + private rows in one list, hidden project links omitted, `project`/`private`/`pending` statuses, alphabetical order, and matching on title/slug/comment (case-insensitive) | TC-91 |
+| AT-18 | Pre-fill guard | `acceptablePrefillUrl` accepts absolute http(s) URLs within the length cap, and ignores `javascript:`/`data:`/`file:`/non-strings/over-long values | TC-92 |
+| AT-19 | Bookmarklet builder | `addLinkBookmarklet` targets the **Links hub** (the private-link form, never the settings page), embeds the given edition's ids, prefers the project of the current page and otherwise uses the pinned project (so a fixed link works), only derives a project on Azure DevOps hosts, does not double-encode an already-encoded segment, and leaves unrelated pages alone | TC-92 |
+| AT-20 | Error reporting | `describeError` returns the Error message, a plain object's `message` with its name, the JSON body's message from `responseText`, the name plus HTTP status when there is no body, and a bounded fallback - never `[object Object]` | B11 |
+| AT-21 | Pending label | `pendingLabel` renders "1 pending" and "N pending" | TC-93 |
 
 ## Test cases
 
@@ -552,6 +562,105 @@ Open a pull request from a feature branch into `main`, then one from `develop` i
 passes; a pull request cannot merge before `build` succeeds; and once any pull request merges, GitHub
 deletes its head branch - `git ls-remote --heads` lists only `main` and `develop`.
 
+### TC-83  -  The Links hub hint follows project settings access  (FR-NAV-4, D27)
+Open the Links hub in a project with no project links, first as a user who can open Project settings
+and then as a plain project member.
+**Expected:** the first sees "No links yet. Add them under Project settings -> Static -> Links."; the
+member is told to ask a project administrator instead, so the hub never points at a page they cannot
+reach. When the probe cannot be evaluated the neutral wording appears - never a wrong instruction.
+(Q17: the member half needs a non-administrator identity.)
+
+### TC-84  -  The Org.Settings button follows organization settings access  (D27)
+Open Project settings -> Static as an administrator and as a plain project member.
+**Expected:** the **Org.Settings** button is present for a user who can open the organization settings
+and absent without that access; nothing else changes (a `false` probe removes only that button, and an
+unavailable probe leaves it visible so an administrator is never locked out).
+
+### TC-85  -  Private links: create, edit, delete  (FR-LINK, D28)
+In the Links hub, press **Add private link** and build a link (title, slug, URL or the cascading
+builder), then save; edit it (the slug is locked) and save; delete it and confirm.
+**Expected:** the row appears in the single merged list with **Status** `private`, alphabetically by
+title, and the **Edit / Delete / Share** icons stay on one row at the right edge. Save returns to the
+list with the row present and persisted across a reload; an edit keeps the slug; delete removes only
+that row. Adding a slug that a project link or another private link already uses is refused with a
+link-specific message.
+(Automated: `slugTaken`; the editor's validation is shared with the settings page - TC-04/TC-05.)
+
+### TC-86  -  A private link is private  (D28)
+1. In the debug browser profile signed in as member A, create two private links.
+2. Reload the hub as member B (a second account) in the same project.
+**Expected:** member B sees **their own** private links (empty on a first visit) and never A's; the
+project links table is identical for both. Reading the store with A's token cannot return B's links,
+and vice versa. (MAN while only one identity exists - Q18.)
+
+### TC-87  -  Share offers a snapshot  (D28)
+Share a private link and confirm; then edit the private link's title/URL.
+**Expected:** the confirmation lists what is submitted (title, slug, URL, comment) and that the
+private copy stays until it is added. The row's Status becomes `pending` and its Share button is
+disabled. The project settings -> Links tab shows **Proposed links (1)** with the **original**
+title/URL (the later edit does not change the snapshot) and the proposer's name.
+
+### TC-88  -  Accepting promotes the link  (D28)
+On the settings page, press **Add to project** for a proposed link and confirm.
+**Expected:** a normal project link appears (View/Edit/Delete, and `proposedBy` recorded) that behaves
+exactly like an added link; the proposal disappears from the settings section; on the proposer's next
+hub load the private row is gone (promotion) and the project table shows the link. Pressing Add twice
+(or reloading mid-way) cannot create a duplicate.
+
+### TC-89  -  Rejecting returns the link  (D28)
+Propose a private link, then press **Reject** on the settings page and confirm.
+**Expected:** the proposal disappears from the settings section; the proposer's hub still shows the
+link with Status `private`, and its Share button is enabled again with the tooltip saying the last
+proposal was not accepted. A proposal whose slug was taken meanwhile shows why and offers only
+**Reject**.
+
+### TC-91  -  One merged Links list with a filter  (FR-LINK, D28)
+In a project that has both kinds of link, open the Links hub, then type in the filter box.
+**Expected:** a **single** table shows project links and the user's own private links together, ordered
+alphabetically by title, with the columns Title, Slug, Area, Comment, **Status** and **Actions**.
+Status reads `project`, `private` or `pending` (a proposed link), project rows have **no** actions, and
+Status/Actions sit at the right edge taking only the width their content needs. The filter narrows the
+list as you type, matching any substring of the **title, slug or comment** (case-insensitive); no match
+says so and names the filter; clearing it restores every row.
+(Automated: `mergedRows` - merge, hidden project links omitted, statuses, title order, and matching on
+title/slug/comment.)
+
+### TC-90  -  Private links stay out of backups  (D28)
+Create private links, propose one (and promote one), then download an organization backup and inspect
+`static-backup.json`.
+**Expected:** the export contains the **project** collections only: `links` (including a promoted
+link) and `link-proposals` (proposals are project data). There is **no** `private-links` document, and
+a private link that was never promoted appears nowhere in the archive. Restoring that backup leaves
+every user's private links untouched.
+
+### TC-92  -  Add a private link from any page  (FR-LINK-8, FR-ADM-13)
+Open the **Links** hub and press the **info** button beside the subtitle. A dialog must open with the
+explanation and the **Add to Static** link; right-clicking the link must offer *Bookmark link* (dragging
+it to the bookmarks bar does the same), and a click on the dimmed backdrop or Escape must close the
+dialog. The link must carry the installed edition's id (`f-steff.static.static-links-hub` released,
+`f-steff.static-dev.static-links-hub` development) and pin this project. Then click that bookmark on any
+Azure DevOps page (a build's log view is a good one).
+**Expected:** the **Links hub** opens with the **private-link** form shown, its URL field filled and the
+cascading builder matched (a build log URL yields the pipeline/build/view and the stage/job/task
+target); the primary button reads *Add private link*, and saving keeps the link in the user's own scope
+(Status `private`). The project is resolved as follows: a page inside a project lands in **that**
+project, a page outside Azure DevOps (a fixed link) or an organization page (`_settings`) lands in the
+project the bookmarklet was taken from. Opening the **settings** page with `?url=<that page's URL>`
+instead fills the **project**-link form (FR-ADM-13). A value that is not an absolute `http(s)` URL (for
+example `javascript:alert(1)`) is ignored in both, and the text-only bookmarklet (no pinned project)
+does nothing on a page that names no project.
+(Automated: `acceptablePrefillUrl`, `addLinkBookmarklet`.)
+
+### TC-93  -  Pending-proposal indicator in the hub  (FR-LINK-9)
+In a project with at least one proposed link (the test project has one), open the **Links** hub as a
+caller who can open the project settings page, then as a caller who cannot.
+**Expected:** the caller who can act sees a red pill with a warning icon and the count (for example
+*1 pending*) beside the info button; clicking it opens Project settings -> Static -> Links, where the
+proposal can be accepted or rejected. The caller without settings access sees no pill. The count covers
+every proposal in the project, not only the caller's own, and it disappears once the last proposal is
+decided (reload the hub to see that).
+(Automated: `pendingLabel`.)
+
 ### TC-73  -  Trash retention and "Permanent delete by"  (FR-ADM)
 Open Project settings -> Trash.
 **Expected:** the table shows a **Permanent delete by** column (`deletedUtc` + 5 days). Retention is
@@ -569,6 +678,165 @@ because it writes a build attachment, not extension data. (MAN: needs an org whe
 is installed - verified with build 4595 in such an organization.)
 
 ## Results log
+
+### 0.2.18 / 0.2.19 (dev edition) - the hub's info dialog and the pending-proposal pill
+
+Run on 2026-10-18 against the deployed `static-dev`, as the member identity
+(`fsteff@tegneserielogen.dk`).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-92 (info dialog) | OK | The Links hub shows the circled-i on the subtitle row; it opens *Save any page as a private link* with the **Add to Static** link (href 453 chars, pinned to `fsteff/StaticTest`), and a click on the dimmed backdrop closes it. Escape closes it as well. The explanation text is present, and the About tabs no longer carry the bookmarklet |
+| TC-93 (negative) | OK | With the real probe this member has no project-settings right (`MANAGE_PROPERTIES` false - the empty project's hub says "Ask a project administrator"), so no pill is shown |
+| TC-93 (positive) | OK (stubbed probe) | With only the permissions response stubbed to `{"value":[true]}` (no data or ACL change), the hub shows the red pill **1 pending** immediately before the info button (`rgb(164, 38, 44)`) with the tooltip "1 pending in Project settings -> Static -> Links: ..."; clicking it opens the settings page on **Links** with **Proposed links (1)** and `Alpha report` |
+
+One observation for D27: for this member ADO renders the proposal's **Add to project** and **Reject**
+buttons enabled, although the `MANAGE_PROPERTIES` probe says no. The pill follows the probe, which is
+the model D27 defines; if members should see it whenever ADO lets them act, the gate has to change.
+
+### 0.2.16 / 0.2.17 (dev edition) - the bookmarklet becomes private, and its project is pinned
+
+Run on 2026-10-18 against the deployed `static-dev`, as the member identity
+(`fsteff@tegneserielogen.dk`).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| B12 | FAIL -> fixed | The bookmarklet opened the **project settings** page, so the form it pre-filled created a **project** link - not the private link a member expects from "add this page". Fixed in 0.2.16: `addLinkBookmarklet` targets the Links hub (`/_apps/hub/{publisher}.{extension}.static-links-hub?url=`) and `links.ts` opens the private-link editor pre-filled. The settings page keeps its own `?url=` receiver for project links (FR-ADM-13), so both forms stay available |
+| TC-92 (private form) | OK | On 0.2.16, from a real build page, the About link's own code opened `.../_apps/hub/f-steff.static-dev.static-links-hub?url=<encoded>` with the URL field `.../results?buildId=2&view=logs&j={{job}}`, the builder pre-selected **Pipeline** -> `static-demo` -> **Specific build...** -> `Build 2 (succeeded) [valid]` -> `Logs: Publish links [valid]`, and the primary button **Add private link**. The settings receiver still fills the project form (*Add link*) |
+| TC-92 (project resolution) | OK | On 0.2.17 the About href pins the project (`{o:"fsteff",p:"StaticTest"}`). From **example.com** (a fixed link) it lands in **StaticTest** with the URL `https://example.com/` and Area **Fixed (any URL)**; from a page in **StaticEmpty** it lands in **StaticEmpty**; from an organization page (`/fsteff/_projects`) it falls back to **StaticTest** |
+| TC-92 (guard) | OK | `?url=javascript:alert(1)` leaves the hub's editor closed and the settings page's URL field empty, so neither receiver pre-fills a non-http(s) value |
+
+The pinned project is what makes a fixed link work: its page is not on Azure DevOps, so there is no
+project to read from the URL. The text-only bookmarklet in docs/07 has no pinned project and does
+nothing on such a page.
+
+### 0.2.13 - 0.2.15 (dev edition) - the About-tab bookmarklet, readable failures, and the end-to-end run
+
+Run on 2026-10-18 against the deployed `static-dev`.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-92 (About link) | OK | On 0.2.13 the About tab shows **Adding a link from any page** with the link *Add the page I am on to Static*, the tooltip "Right-click this link and choose 'Bookmark link' (or drag it to the bookmarks bar)." and a grab cursor. Its href carried the installed edition's settings page at the time (superseded in 0.2.16 - see B12 above; the link now targets the Links hub) |
+| B11 | FAIL -> fixed | The page and the host banner showed `[object Object]` when initialization failed. The account in use is not in the organization's directory, so the REST client rejected with `TFS.WebApi.Exception` - which has no `message`; the server's text sits in `responseText`, and `describeError` fell through to `String(error)`. Fixed in 0.2.14 and re-verified live: on 0.2.14 both the page and the banner read `TFS.WebApi.Exception: TF400813: The user is not authorized ... not a member of the AAD directory ...` |
+| TC-92 (end to end) | OK (0.2.15) | Signed in as the member identity (`fsteff@tegneserielogen.dk`) in an isolated session. The About link's own code, run from a real build page (`?buildId=2&view=logs&j=988476ee-...`), navigated to `.../_settings/f-steff.static-dev.static-admin-hub?url=<encoded page URL>`. The page opened on **Links** with the URL field `https://.../results?buildId=2&view=logs&j={{job}}` and the builder pre-selected **Pipeline** -> `static-demo` -> **Specific build...** -> `Build 2 (succeeded) - 2026-10-15 [valid]` -> `Logs: Publish links [valid]`, with the note "Detected a pipeline link; adjust any level below." The guard holds too: `?url=javascript:alert(1)` leaves the URL field empty and the builder at "(choose an area)" |
+
+The 401 above is not a Static problem - the host refuses the account before any extension data is
+read - and it made a useful test case for B11: the message now names exactly what is wrong. With the
+member identity signed in, the same run completed on 0.2.15.
+
+### 0.2.12 (dev edition) - add a link from the page you are looking at (TC-92)
+
+Run on 2026-10-17 against the deployed `static-dev` 0.2.12, as the owner. The extension id in the URL
+is the development one because that is the edition installed in the test organization; the released
+edition differs only by that id (see the note in [07](07-admin-experience.md#adding-a-private-link-from-any-page-bookmarklet)).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-92 (bookmarklet) | OK | From a real build page (`?buildId=2&view=logs`) the bookmarklet's own code navigated to that project's settings page with `?url=<encoded page URL>`; it opened on the **Links** tab with the URL field filled (`...&j={{job}}`) and the builder pre-selected: **Pipeline** -> `static-demo` -> **Specific build...** -> `Build 2 (succeeded) - 2026-10-15 [valid]` -> `Logs: Publish links [valid]`, with the note "Detected a pipeline link; adjust any level below." Title and slug are correctly left empty for the user |
+| TC-92 (guard) | OK | The same page with `?url=javascript:alert(1)` left the URL field empty and the builder untouched, so a crafted query cannot pre-fill a non-http(s) target; the pure guard `acceptablePrefillUrl` is unit-tested too |
+
+### 0.2.11 (dev edition) - the permission negatives, with a demoted identity
+
+Run on 2026-10-17 against the deployed `static-dev` 0.2.11, with the second identity (Q18) holding **no**
+administrator role: removed from the organization's Project Collection Administrators group and given
+plain membership of two projects (one empty, one for the settings check).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-83 (negative) | OK | In the empty project the member is a plain member: the project probe answers `permissions/52d39943-.../131072 -> {"value":[false]}` (`MANAGE_PROPERTIES`), and the hub says "No links yet. **Ask a project administrator** to add project links under Project settings -> Static -> Links, or add a private link." |
+| TC-83 (positive) | OK | The owner (a collection administrator) sees "No links yet. **Add a project link under** Project settings -> Static -> Links, or add a private link." |
+| TC-84 (negative) | OK | The member **can** open that project's settings page (a member, not an administrator) and the collection probe answers `permissions/3e65f728-.../2 -> {"value":[false]}` (`GENERIC_WRITE`), so the **Org.Settings button is absent** - the case this feature exists for |
+| TC-84 (positive) | OK | For the owner the collection probe answers `{"value":[true]}` and the button is present |
+| B10 (re-verified) | OK | Every probe result above comes from a real `permissions/...` call, so the 0.2.9 fix is confirmed with both identities |
+
+TC-83 and TC-84 are now complete in both directions; nothing is outstanding on the permission-aware UI.
+
+### 0.2.8 / 0.2.9 (dev edition) - a second identity: isolation, and a probe bug
+
+Run on 2026-10-17 against the deployed `static-dev`, with **two** identities in separate browser
+sessions: the publisher/owner and a second member (Q18).
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-86 | OK | With the owner's `Alpha report` private link (status `pending`) and the member's `Beta note`: each sees **only its own** private row, neither sees the other's, every row carries the right status (`project` / `private` / `pending`), and `?page=alpha-report` as the member answers "No link with the slug 'alpha-report' exists in this project." The project links are identical for both. The user scope does the isolation - neither user's row appears in the other's store |
+| TC-91 (re-run) | OK | The merged list, the three statuses, the right-aligned content-sized Status/Actions columns and the icons were re-verified on 0.2.8 with both identities (the filter itself was verified on 0.2.7; 0.2.8 changed only the hash handling) |
+| Cosmetic (0.2.8) | OK | `#list` replaces the bare `#`: opening the editor gives `#edit=<linkId>` and Cancel returns to `#list`, so the URL never ends in a lone `#` |
+| TC-83 | OK (positive) / NOTE | The project probe now evaluates: the member's call is `permissions/52d39943-.../131072 -> 200 {"value":[true]}` (`MANAGE_PROPERTIES`), so the hub says "Add a project link under Project settings -> Static -> Links" for both identities. The **negative** wording needs an identity without project-settings access, and neither test identity is one - see below |
+| TC-84 | OK (positive) / NOTE | Same for the collection probe: `permissions/3e65f728-.../2 -> 200 {"value":[true]}` (`GENERIC_WRITE`), so the **Org.Settings** button is present for both identities. Correct - and the negative half (button absent) needs an identity without those rights |
+| B10 | FAIL -> fixed | The probes never evaluated at all: they fetched the namespace definition (200) and never asked for a permission, because the API wraps the definition as `{count, value:[{...actions...}]}` while `findActionBit` looked for `actions` at the top level. Unknown is published as "keep the control visible", so the feature was inert yet never failed a test. Fixed in 0.2.9 (both shapes accepted, with a regression test) and re-verified live: the member's probe now issues the `permissions/...` call and the control follows the answer |
+
+To finish the negative halves of TC-83/TC-84 the test identity has to lose the rights it holds today
+(it is effectively both a project and a collection administrator): removing it from the organization's
+**Project Collection Administrators** group and giving it plain membership of one test project (the
+empty project created for this check) would produce the "ask a project administrator" wording and hide
+the **Org.Settings** button. Recorded in Q17/Q18.
+
+### 0.2.6 / 0.2.7 (dev edition) - one merged Links list with a Status column and a filter
+
+Run on 2026-10-16 against the deployed `static-dev` in the test project (which the pipelines now fill
+with three project links), one identity.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-91 (list) | OK | One table with the columns Title, Slug, Area, Comment, **Status**, **Actions**; the three project links appear alphabetically (`Build artifacts 2`, `Build log 2`, `Static documentation`); every row reads `project` and project rows carry **no** action buttons |
+| TC-91 (columns) | OK | Status and Actions are right-aligned and content-sized - `Status=55px`, `Actions=63px` against `Comment=293px` - so the data columns take the rest |
+| TC-91 (private + pending) | OK | Adding `Alpha report` puts it **first** (alphabetical across both kinds) with Status `private` and Edit/Delete/Share; after sharing, Status becomes `pending` and Share turns into `"Alpha report" is already proposed` (disabled) |
+| TC-91 (filter) | OK | `build` -> the two build links (title); `static-doc` -> one (slug); `URL file` -> one (comment); `zzz` -> "No links match \"zzz\"."; clearing restores every row. All case-insensitive |
+| B9 | FAIL -> fixed | 0.2.6 showed the six columns and the filter but **no rows at all**: `linksSection()` called `renderRows()` while the table was still detached, and `renderRows()` looks the tbody up by id, so it returned early. The first paint's loading row appeared (it is appended through a live reference) and typing in the filter made rows appear (attached by then) - both symptoms matched the cause. Fixed in 0.2.7 by rendering the rows after `root.appendChild(page)`, and re-verified above |
+
+### 0.2.3 (dev edition) - the styling fix, retested
+
+Retest of B8 on the deployed 0.2.3, in the same project and identity as the 0.2.2 run.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| B8 (retest) | OK | The hub's confirmation dialog now computes `position: fixed` over a 35% overlay with `z-index: 1000`, and the panel `border-radius: 6px`, `padding: 16px 20px`, `max-width: 460px` and a shadow; the message keeps its newlines (`white-space: pre-line`) |
+| B8 (no regression) | OK | The project settings page still renders correctly after the duplicated blocks left `admin.css`: tabs present, `button.primary` rgb(0,120,212) with 6px/12px padding, `.form-label` 110px, `.hint` 12px, table header bold on the neutral background, builder and section boxes unchanged |
+| Process | NOTE | The publish run failed while **polling validation** on a transient Marketplace error ("Our services aren't available right now") although the upload had succeeded, so 0.2.3 was left without its tag and commit status; both were created by hand, and a re-run then failed with "Version number must increase", which confirms the upload had landed. See Q19 |
+
+> The functional round trip (TC-85/87/88/89/90) was not repeated: 0.2.3 differs from 0.2.2 only in the
+> stylesheets and the documentation, and the dialog was opened and closed as part of this retest.
+
+### 0.2.2 (dev edition) - private links and the proposal round trip
+
+Run on 2026-10-15 against the deployed `static-dev` 0.2.2 in the test organization (one project, one
+identity - see Q18), driving the extension iframe in the debug browser.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-85 | OK | The editor opened with the shared form (Title, Slug, Comment, URL, Area). Title `Team runbook`, slug `team-runbook` and a repository URL saved with **Area = Repo** detected by the paste parser; the row survived a reload; edit locked the slug (`disabled`) and the rename persisted |
+| TC-85 (validation) | OK | A private slug that a project link owns was refused with "A link with that slug already exists." (red hint, primary disabled) |
+| TC-85 (deep link) | OK | `?page=scratch-link` resolved the **private** link and navigated the host to `.../_build` |
+| TC-85 (delete) | OK | Confirmation "Delete \"Scratch link\"? It is a private link, so this removes it for you only."; the table returned to "No private links yet." |
+| TC-87 | OK | Share asked for confirmation naming what is submitted (title, slug, URL, comment); the row switched to **Proposed - waiting for a decision.** with Share disabled (`"..." is already proposed`) and a notice reported the proposal |
+| TC-88 | OK | Project settings showed **Proposed links (1)** with the **snapshot** title (renaming the private link afterwards did not change it) and Proposed by; `Add to project` created an ordinary project link (`View/Edit/Delete`) and the section returned to 0; the hub then listed the project link and the private original was gone (promotion) |
+| TC-89 | OK | `Reject` asked "Do not add \"Scratch link\"? Its owner keeps the private link and sees that it was not added."; the hub showed **Not accepted. Edit it and share again.** with Share enabled again, and editing cleared the message (status back to Private) |
+| TC-90 | OK | The downloaded archive held only `link-proposals` and `links` (with the promoted link) - no `private-links` document, and the never-promoted private link appeared nowhere in it |
+| TC-83 / TC-84 (positive half) | OK | The hub hint named Project settings for a user who can open them, and the **Org.Settings** button was present for the collection administrator |
+| B8 | FAIL -> fixed | The share/reject/delete confirmation rendered **unstyled in the hub** (overlay `position: static`, panel without padding): its CSS lived only in `admin.css`. Moved to the shared `common/dialog.css`, linked by both pages; retested in 0.2.3 |
+
+Not covered here: **TC-86** (a second member cannot see or change these links) and the negative halves
+of **TC-83/TC-84** - all three need a second (non-administrator) identity in the project, see Q17/Q18.
+
+### 0.2.0 (stable; first release of the code the dev editions carried) - process cases
+
+Released on 2026-10-14 by merging `develop` into `main` (PR #32). The extension content is the code the
+dev editions carried (unchanged since the `static-dev` builds swept below), so this block records what
+is specific to the release: the automated gate, the release mechanics, and the process cases.
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| TC-29 | OK | `npx tsc --noEmit` clean, `npm run lint` 0 warnings (`--max-warnings 0`), **72/72** tests, `verify:clean` clean - locally and in the `Verify` step of the release run |
+| TC-79 | OK | `Publish stable (release)` run 38613402269: all 12 steps green; **`static` 0.2.0** (public listing) and **`static-dev` 0.2.0** published at the same version; tag `v0.2.0` points at the merge commit that is `main`'s head; the merge triggered exactly two runs (`Publish stable` + `CI`) |
+| TC-81 | OK | The release run carries **no annotations** (every step `success`, no warning/error annotation) |
+| TC-80 | OK | The run names the outcome and the version (`Summarise what was published`, commit status `Marketplace: static: Published Static 0.2.0`). The organization is invisible in `share dev` - dispatched on `main` (run 38614439140, after the release brought the fixed workflow there): **0** raw occurrences in the log, 7 redacted lines, `Sharing extension with ***.` |
+| TC-82 | OK | The release arrived as a `develop` -> `main` pull request and `release-source` passed; the feature branch was deleted on merge; only `main` and `develop` remain |
+
+Sharing is not touched by a publish: the release log reports `Sharing: not shared (use --share-with to
+share)` for both editions, so the organizations already shared keep access to 0.2.0.
+
+> Follow-up (cosmetic): the release records only the **stable** commit status, so the dev edition
+> published at the same version has no status of its own.
 
 ### 0.0.9 (dev edition) - restore flow, and a full backup/restore round trip
 
@@ -606,7 +874,7 @@ pipeline run (build ids in the evidence).
 | TC-16, TC-19 | OK | `?page=<slug>` renders the stored page: its headline and controls appear in the sandboxed child frame |
 | TC-21 | OK | `?page=no-such-page-xyz` -> "No page with the slug 'no-such-page-xyz' exists in this project." |
 | TC-29 | OK | `tsc` clean, 59/59 unit tests, lint 0 errors, `verify:clean` clean |
-| TC-53 | OK | Packaged VSIX: 8 PNGs, 0 SVGs, all three task folders, `overview.md` + `LICENSE` |
+| TC-53 | OK | Packaged VSIX: 8 PNGs, 0 SVGs, all three task folders, `marketplace-advertisement.md` + `LICENSE` |
 | TC-74 | OK (pipeline) | Build 4599: `extension: static` (not installed) failed with the edition-mismatch hint |
 | TC-77 | OK (pipeline) | Build 4601: no `extension` input -> `Using Static edition 'static-dev'.`, then published the page |
 | TC-76 | OK (pipeline) | Build 4605: backup wrote 38,410 bytes (1 project, 3 documents) and attached the artifact; the dry-run restore reported "would restore 1 project(s), 3 document(s); no writes were made" |
@@ -735,6 +1003,22 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | 0.1.54 | OK | NOTE | Short **Area** labels (Repo/PR/Pipeline/Artifact/Fixed), Title/Area no-wrap on all tabs, auto-**Fixed** for unmodelled URLs, and a fix for the false "missing placeholder" error on concrete-build log links; tests 47/47 |
 | 0.1.55 | OK | NOTE | Builder notes are neutral (red reserved for validation errors) |
 | 0.1.56 | OK | NOTE | Pages/Links settings gain a **View** action (opens in a new tab); Trash tables show **Permanent delete by** (deletedUtc + 5 days); the Pages hub now also enforces the 5-day lazy purge; tests 48/48 |
+| 0.2.2 | OK | OK | **Private links** (user-scoped store) and **proposing** one to the project: two tables in the Links hub, Edit/Delete/Share on one row, the shared link editor, and Add to project / Reject with promotion; the confirmation dialog moved to a shared stylesheet (B8); tests 81/81 |
+| 0.2.6 | OK | FAIL | **One merged Links list** (Status `project`/`private`/`pending`, Status+Actions right-aligned and content-sized, alphabetical, filter over title/slug/comment); the list rendered **empty** (B9) |
+| 0.2.7 | OK | OK | B9 fixed (rows rendered after the table is attached); the merged list, the statuses, the column sizing and all four filter behaviours verified; tests 83/83 |
+| 0.2.8 | OK | OK | The list's address is `#list` instead of a bare `#`; private-link isolation verified with a second identity (TC-86) |
+| 0.2.9 | OK | OK | **B10** fixed: the permission probes now evaluate (the namespace definition is unwrapped), so the permission-aware controls follow the answer instead of always falling back to visible; tests 84/84 |
+| 0.2.10 | OK | OK | Publishing authenticates with the **Microsoft Entra identity** through GitHub OIDC (the federated credential is fixed), with the PAT still as a fallback while the change was proven |
+| 0.2.11 | OK | OK | The PAT fallback removed (no repository secret left); a publish with no PAT available proves the identity alone works. Permission-aware UI complete: TC-83/TC-84 verified in both directions with a non-administrator second identity |
+| 0.2.12 | OK | OK | **Add a link from any page**: the settings page accepts `?url=<page URL>` and pre-fills the form (the bookmarklet in docs/07, FR-ADM-13); verified from a real build page, including the log-target pre-selection and the non-http(s) guard; tests 85/85 |
+| 0.2.13 | OK | OK | The **About** tab carries the add-to-Static bookmarklet as a right-clickable link built from the installed edition's ids; verified on the deployed page (dev id, tooltip, grab cursor). The end-to-end run from a build page completed on 0.2.15 |
+| 0.2.14 | OK | OK | **Readable failures**: `describeError` reports the server's message (`responseText`), name and HTTP status, so a directory mismatch reads TF400813 instead of `[object Object]` on the page and in the host banner (B11); tests 88/88 |
+| 0.2.15 | OK | OK | `overview.md` renamed to `marketplace-advertisement.md`, with the manifest `content.details.path` updated and the rename verified by packaging (the VSIX contains the new name); TC-92's end-to-end run passed on this build |
+| 0.2.16 | OK | OK | The bookmarklet now opens the **Links hub** and offers the page as a **private** link (FR-LINK-8); the settings page keeps its `?url=` receiver for project links (B12) |
+| 0.2.17 | OK | OK | The bookmarklet **pins the project** it came from, so a fixed link (an external page) still lands in the right project; a page in another project uses that project; organization pages fall back to the pinned one; tests 89/89 |
+| 0.2.18 | OK | OK | The Links hub has an **info** button that explains the bookmarklet in a dialog (outside click or Escape closes) and the About tabs no longer carry it; tests 89/89 |
+| 0.2.19 | OK | OK | The hub shows a red **pending-proposal** pill with the project-wide count to callers who can manage the project settings, linking to the proposals (FR-LINK-9); tests 90/90 |
+| 0.2.0 | OK | NOTE | **First stable release of the code the dev editions carried**: organization backup/restore (settings tab + `StaticAdmin@0`), the one-row restore flow, edition auto-detection (`extension: auto`), real About details; publishing is cloud-only (D21); both editions publish at one version (D24); share runs never name the organization; runs carry no annotations; only `main` and `develop` are long-lived (D26); tests 72/72 |
 
 ## Bugs found and fixed
 
@@ -745,6 +1029,9 @@ deployed extension (footer showed `Static 0.1.41`/`0.1.43`):
 | B3 | pipeline | "A task is missing ... PublishPage with version 1" | Task major version is 0, so the alias is `PublishPage@0` | Pipeline uses `PublishPage@0` |
 | B4 | 0.1.17 (found by user) | Disabling a page dimmed the whole row, so the now-"Enable" button looked ghosted though clickable | `.disabled-row { opacity: 0.6 }` applied to the entire row | Mute only the page name (`.disabled-name`); never dim action buttons |
 | B5 | 0.1.17 (found by user) | When Pages was disabled org-wide, the hub still showed the stale per-project wording ("Enable it under Project settings -> Pages") | `renderDisabled` text and no re-check of the org switch | Org-wide wording; throttled `checkEnablement()` reloads the hub when the switch changes |
+| B6 | 0.2.0 (found in a `share dev` run) | A `share dev` run on `main` was marked **failed** although the share itself succeeded | The workflow on `main` referenced `ci/shared-with.mjs` and `scripts/tfx.js show`, which existed only on `develop` (a workflow-only sync) | The report reads the list with `npx tfx-cli` directly, prints a graceful fallback and is `continue-on-error`, so a report can never fail a share (#29) |
+| B7 | 0.2.0 (found while testing B6) | The organization was printed in the run log: once through a step's `env:` block, four times through a job-level variable | The runner prints a step's `env:` block **before** the step runs, so `::add-mask::` cannot redact its own step (and inherited variables appear in every earlier step) | The value is read from the event payload file and handed on with `::add-mask::` and `eval` only - it never enters an `env:` block or the script text (#30, #31) |
+| B8 | 0.2.2 (found on 0.2.2, fixed for 0.2.3) | The Share/Reject/Delete confirmation in the **Links hub** rendered unstyled: the overlay was `position: static` (so the text flowed inline) and the panel had no padding or shadow | The dialog classes were styled only in `admin.css`; the hub links its own stylesheets, and the shared editor stylesheet did not cover the dialog | The dialog styles moved to `common/dialog.css`, which both entry points link (the editor styles had already moved to `common/link-editor.css` the same way) |
 
 ## Remaining manual checks (cross-origin iframe)
 

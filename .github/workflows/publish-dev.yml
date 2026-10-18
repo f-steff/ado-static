@@ -5,9 +5,9 @@ name: Publish dev
 # Rationale: the version is derived from git tags, then the published version is tagged. Both editions
 # share one tag sequence, so a `develop` merge publishes the next revision of the *released* minor
 # (0.1.0 -> 0.1.1 -> 0.1.2): a dev version reads as "the current release plus N merges", and a release
-# (`publish-stable`) publishes both editions at the same version. The `MARKETPLACE_PAT` secret holds a
-# Marketplace (Manage) token; sharing with tester organizations is a separate, explicit step
-# (`share-dev.yml`).
+# (`publish-stable`) publishes both editions at the same version. Publishing authenticates with the
+# `marketplace` environment's Microsoft Entra identity through GitHub OIDC (no stored secret); sharing
+# with tester organizations is a separate, explicit step (`share-dev.yml`).
 #
 # Visibility: GitHub evaluates `run-name` when the run is created and offers no API to rename a run
 # afterwards, so the computed version cannot appear in the run list. Instead this workflow writes a
@@ -15,7 +15,7 @@ name: Publish dev
 #
 # `paths-ignore`: a push whose every changed path is documentation, the CI/release scripts, tests, or
 # repository housekeeping cannot change the shipped extension, so it must not mint a version.
-# `overview.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored; neither is
+# `marketplace-advertisement.md` and `LICENSE` are packaged into the VSIX and are therefore NOT ignored; neither is
 # `scripts/**`, because that tooling decides what goes into the package.
 on:
   push:
@@ -45,6 +45,7 @@ run-name: "Publish dev${{ inputs.version && format(' {0}', inputs.version) || ''
 permissions:
   contents: write
   statuses: write
+  id-token: write # request the GitHub OIDC token for the publishing identity
 
 # Serialize with the stable publish: the two editions share one tag sequence, so publishes must not
 # interleave. A queued run recomputes its version from the tags when it starts.
@@ -55,6 +56,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-24.04 # pinned: ubuntu-latest migrates to Ubuntu 26 in October 2026
+    environment: marketplace # matches the federated credential's subject
     steps:
       - uses: actions/checkout@v7
         with:
@@ -91,9 +93,28 @@ jobs:
           fi
       - name: Build (production)
         run: npm run build:prod
+      # The publishing token, best first: a Microsoft Entra access token obtained with the GitHub
+      # OIDC token (no stored secret), falling back to the PAT secret while the identity is being
+      # proven. 499b84ac-1321-427f-aa17-267ca6975798 is the well-known Azure DevOps / Visual Studio
+      # resource id.
+      - name: Sign in for the publishing token (OIDC, no secret)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Acquire the publishing token
+        run: |
+          TOKEN="$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)"
+          if [ -z "$TOKEN" ]; then
+            echo "Could not obtain a Microsoft Entra token for the Marketplace (is the federated identity configured?)"
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "TFS_PAT=$TOKEN" >> "$GITHUB_ENV"
+          echo "Publishing with a **Microsoft Entra** token (OIDC, no secret)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Publishing with a Microsoft Entra token (OIDC, no secret)."
       - name: Publish dev extension
-        env:
-          TFS_PAT: ${{ secrets.MARKETPLACE_PAT }}
         run: npm run publish:dev
       - name: Tag the published version
         run: |
@@ -105,6 +126,26 @@ jobs:
             git tag -a "${{ steps.version.outputs.tag }}" -m "Static ${{ steps.version.outputs.version }}"
             git push origin "${{ steps.version.outputs.tag }}"
           fi
+      # Best effort: the upload is accepted and the tag is pushed, so the *asynchronous* Marketplace
+      # validation must never fail the run - a status poll once flaked and left a published version
+      # untagged (Q19/D29). The state goes into the summary instead.
+      - name: Report the validation state
+        if: always()
+        run: |
+          VALIDATION="$(node scripts/tfx.js validate dev 2>&1 || true)"
+          # Printed as well as collected: the run summary is not part of a run's log, so echoing it
+          # here is what makes the reported state checkable from outside.
+          echo "$VALIDATION"
+          {
+            echo ""
+            echo "## Marketplace validation"
+            echo ""
+            echo "The upload is what the tag depends on; this is the asynchronous check that follows it."
+            echo ""
+            echo '```'
+            echo "$VALIDATION"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       # Visible outcome: the run page gets a summary naming the version, and so does the commit.
       - name: Summarise what was published
         if: always()

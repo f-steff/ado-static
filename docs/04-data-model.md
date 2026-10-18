@@ -25,7 +25,8 @@ inside the account-wide `Default/Current` scope. Both the web extension and the 
 
 | Level | Scope | Collection | Data |
 | --- | --- | --- | --- |
-| Project | `Default` / `Current` | `static-{projectId}` | index, content, links, repo visibility |
+| Project | `Default` / `Current` | `static-{projectId}` | index, content, links, proposals, repo visibility |
+| User (private links) | `User` / `Me` | `static-{projectId}-private` | the signed-in user's private links for that project |
 
 `{projectId}` is the project GUID (`$(System.TeamProjectId)` in pipelines,
 `SDK.getWebContext().project.id` in the web extension).
@@ -42,6 +43,62 @@ inside the account-wide `Default/Current` scope. Both the web extension and the 
 | `content-meta-{pageId}` | `ContentMeta` | Encoding, chunk count, decoded byte size, SHA-256, updated info. |
 | `content-{pageId}-{nnn}` | `ContentChunk` | One chunk per document. |
 | `repo-visibility` | `{ hidden: string[] }` | Repo ids hidden from the Repos hub. |
+| `link-proposals` | `ProposalIndex` | Private links members offered to the project, awaiting a decision. |
+
+### Private links (the `User` scope)
+
+A **private link** belongs to one member and must not be visible to anybody else, so it is stored in
+the service's **`User/Me` scope** rather than in the project's shared collection with an `ownerId`
+filter: the service then does the isolation, and a mistake in our query cannot leak somebody else's
+links. One store per user **per project** (`static-{projectId}-private`, document `private-links`),
+because a link is always relative to the project it points into.
+
+```jsonc
+{ "id": "private-links", "kind": "private-links", "schemaVersion": 1, "revision": 2,
+  "links": [ /* the same LinkEntry shape as project links */ ] }
+```
+
+A private link carries up to two extra fields:
+
+- `proposal: { proposalId, proposedUtc }` - set while it is offered to the project (awaiting a decision);
+- `rejectedUtc` - set when a proposal was rejected, so the hub can say so and offer Share again
+  (editing the link clears it).
+
+Private links work like project links otherwise: same builder, same validation, and a `?page=<slug>`
+bookmark resolves them **only when no project link owns that slug** (project links win, so a private
+slug can never shadow somebody else's link).
+
+### `link-proposals`
+
+```jsonc
+{ "id": "link-proposals", "kind": "link-proposals", "schemaVersion": 1, "revision": 4,
+  "proposals": [
+    { "proposalId": "...", "privateLinkId": "...", "slug": "my-report", "title": "My report",
+      "url": "https://dev.azure.com/...", "comment": "", "dynamic": { }, "area": "build",
+      "proposedById": "...", "proposedByName": "Sam", "proposedUtc": "...",
+      "state": "open",              // open | accepted | rejected
+      "decidedUtc": "", "decidedBy": "", "acceptedLinkId": "" }
+  ] }
+```
+
+The proposal holds a **snapshot**: later edits to the private link cannot silently change what the
+reviewers approved. `privateLinkId` is what lets the proposer's client recognise the outcome - the
+reviewer never needs (or is able) to write to another user's store:
+
+| Decision | What happens |
+| --- | --- |
+| Accept | A project link is created from the snapshot (the project owns it, and it behaves like any added link); the record is marked `accepted` with `acceptedLinkId`. |
+| Reject | The record is marked `rejected`; the member keeps the private link and sees "Not accepted. Edit it and share again.". |
+
+The proposer's client reconciles on its next visit (`reconcile()` in
+[`src/common/private-links.ts`](../src/common/private-links.ts)): an accepted proposal removes the
+private original (promotion), a rejected one marks it, and anything already applied is forgotten. A
+proposal whose private link no longer exists is withdrawn, so no reviewer is asked about a link that
+is gone.
+
+> **Backup**: organization backups read the **project** collections only, so private links and
+> proposals are never included. Restoring a project replaces that collection and leaves every user's
+> private store untouched.
 
 `{pageId}`/`{linkId}` are **opaque** internal GUIDs used only as storage keys; they never appear in
 a URL. The URL uses `slug` exclusively.

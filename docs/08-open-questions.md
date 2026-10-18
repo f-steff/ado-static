@@ -17,7 +17,7 @@
 | D11 | Documents are addressed by an explicit `id` in the body; `DELETE` by id works; an empty collection `LIST` returns 404. | OK |
 | D12 | Sizes use **1024-based (IEC)** units (`B`, `KiB`, `MiB`, `GiB`). | OK |
 | D13 | v1 publishes a **single self-contained HTML file** per page; multi-file pages are a later enhancement (Q15). | OK |
-| D14 | The **Static** group is **always visible**; there is no per-project or org-wide switch. Feature Management is CORS-blocked and contributions are static. | OK |
+| D14 | The **Static** group is **always visible**; there is no per-project or org-wide switch. Removing its icon on projects that do not use it was considered and is **not possible** (hub groups and their hubs are static manifest contributions, and Feature Management is CORS-blocked), so it is not implemented - an unused project simply shows empty hubs. | OK |
 | D15 | Two Marketplace editions of one code base: **`static`** (stable, from `main`) and **`static-dev`** (private, from `develop`), publisher `f-steff`. | OK |
 | D16 | Dynamic link targets that depend on a build are stored **by name** (`{{stage}}`/`{{job}}`/`{{task}}` plus `{{dyn}}`) and resolved at open time; a missing target shows a clear message. | OK |
 | D17 | The optional report tab attaches the page HTML to the build as a `static-page-html` attachment, shown by our own build-results tab (distinct from Html Reports' `report-html`). | OK |
@@ -26,11 +26,15 @@
 | D20 | Publishing runs from **GitHub Actions**; versions are derived from git tags and each published version is tagged `vX.Y.Z`. | OK |
 | D21 | Distribution targets **Azure DevOps Services (cloud) only**. On-premises Azure DevOps Server is a conscious non-goal: the packaged `extension.vsixmanifest` declares `<InstallationTarget Id="Microsoft.VisualStudio.Services.Cloud"/>` only, and every data call is cloud-fixed (`extmgmt.dev.azure.com` in the web extension and all three tasks, `dev.azure.com` in `listProjects`, and `organizationFromUrl` understands only `dev.azure.com` / `{org}.visualstudio.com`) - see the research note in [08](08-open-questions.md#research-kept-distribution-on-premises-and-vsix-artifacts). | OK |
 | D22 | Publishing tasks resolve the edition at run time: `extension: auto` (the default) uses whichever edition is installed, so one pipeline serves a test organization and production; pin `static` to force release-only publishing, which then **fails** while only the development edition is installed (that failure is the point). | OK |
-| D23 | Data is moved between the two editions with the **backup and restore** sequence (project-independent: organization settings -> Backup, or the `StaticAdmin@0` task). Each edition owns a separate data scope, so a swap starts from an empty project - always back up first, then install the other edition, then restore. | OK |
+| D23 | Data is moved between the two editions with the **backup and restore** sequence (project-independent: organization settings -> Backup, or the `StaticAdmin@0` task). Only **one** edition can be installed in an organization at a time, and each owns a separate data scope, so a swap starts from an empty project - always back up first, uninstall, install the other edition, then restore. | OK |
 | D24 | Both editions share **one tag sequence**: a `develop` merge publishes dev at `<released minor>.<revision + 1>` and a release (`main`) publishes **both** editions at the same version. A dev version therefore means "the current release plus N merges", and on release day a tester runs exactly the released code. | OK |
 
 | D25 | The organizations the private dev edition is shared with are **confidential**: the share workflow takes the organization as a dispatch input, masks it with `::add-mask::` before use (which also redacts tfx's own output), and reports only a **count**; the names exist solely on the Marketplace publisher page. | OK |
 | D26 | Only `main` and `develop` are long-lived branches; a branch is deleted when its pull request merges, and `main` can only be reached from `develop` (enforced by the `release-guard` check). Both branches require a pull request and the `build` check. | OK |
+| D27 | Controls that only work for some users are **permission-aware**. The project settings page shows its **Org.Settings** button, and the Links hub words its empty state, from a Security REST probe of the caller (`GET /_apis/permissions/{namespaceId}/{bit}?alwaysAllowAdministrators=true`, the bit resolved from the namespace definition by action name). A probe that cannot be evaluated counts as **unknown** and the control stays visible: hiding something from a user who does have access is the worse failure, and the host denies the action anyway. | OK |
+| D28 | **Private links** are stored in the extension data service's **User scope** (`User/Me`), never in the shared project collection behind an owner filter, so the service isolates them per user. A private link can be **shared**: that writes a frozen **snapshot** to the project's `link-proposals`, where anyone with access to that project's settings may **accept** (the link is promoted - the project owns it and it behaves like any added link) or **reject** (the owner keeps the private link and is told). The reviewer never writes to another user's store; the owner's client applies the outcome on its next visit, and an accepted proposal removes the private original. Private links are excluded from organization backups (the backup reads project collections only). | OK |
+| D29 | A publish **tags as soon as the upload is accepted**: `scripts/tfx.js publish` passes `--no-wait-validation`, and the asynchronous Marketplace validation is *reported* (a `validate` step writes its output into the run summary) but never gates the tag. Rationale: the tag is the version source of truth (D20/D24), so a flaky validation status poll once left a published version untagged, after which every later publish of that branch failed with "Version number must increase" (Q19). | OK |
+| D30 | Publishing authenticates with a **Microsoft Entra identity through GitHub OIDC**: the `marketplace` environment's federated credential (`repo:f-steff@7275320/ado-static@1415789222:environment:marketplace`) lets a workflow fetch an Azure DevOps resource token, and the identity is a **Contributor** member of the publisher. No PAT is stored - `MARKETPLACE_PAT` was deleted - so the 2026-12-01 retirement of Azure DevOps global PATs does not affect publishing. | OK |
 
 ## Open questions
 
@@ -43,10 +47,12 @@
 | Q14 | Should content ever be shared across projects? | Scope model. | No for v1. |
 | Q15 | How should **multi-file pages** be supported? | Authoring model and effort. | v1 single file; then bundle/inline at publish; then a virtual file host. See [03](03-architecture.md#multi-file-pages). |
 | Q16 | Should the **published VSIX** also be attached as a workflow artifact and/or a GitHub Release? | Consumer verification, archival, and installs on on-premises servers (D21). | Cheap as a workflow artifact on every publish; a GitHub Release only for **stable** tags is the useful part. Research kept below; not scheduled. |
+| Q17 | The permission probes (D27) are only exercised with an **administrator** identity so far, which always answers "granted". | TC-83/TC-84 include the *negative* path. | Run them with a plain project member account; if a probe cannot be evaluated there, record `unknown` and keep the neutral wording. |
+| Q18 | Private-link isolation (D28) and the proposal round trip are only exercised with **one** identity so far. | TC-85..TC-89 include "another member cannot see or change my links". | Run them with a second member account in the same project; the user-scoped store is the guarantee, and the case confirms it end to end. |
 
 Resolved questions (kept for context): dynamic sidebar children (D6); path vs query and round-trip
 (D7, D8); per-document size limit = 5,244,928 bytes (D12, [04](04-data-model.md)); publisher/ids
-(D15); gzip compression is the default; `System.AccessToken` publishing works.
+(D15); gzip compression is the default; `System.AccessToken` publishing works; a failed validation poll no longer blocks the version tag (Q19 -> D29).
 
 ## Research kept: distribution, on-premises and VSIX artifacts
 
@@ -105,7 +111,7 @@ Kept from the migration notes, because it explains why the verified-publisher ba
 | --- | --- | --- |
 | Extension Data size ceiling too small for huge reports | A very large page can't be stored | Chunk + compress; a clear failure when a chunk still exceeds the limit. |
 | Publish races / partial writes | Corrupt or stale pages | Content-first ordering; `__etag` read-modify-write; reconciliation. |
-| Azure DevOps global PAT retirement (2026-12-01) | Publish pipeline breaks | Migrate publishing to Microsoft Entra ID via GitHub OIDC **before then**: a service principal added as a publisher member, so no long-lived secret is stored. |
+| Azure DevOps global PAT retirement (2026-12-01) | Publish pipeline breaks | **Done**: publishing authenticates with a Microsoft Entra identity through GitHub OIDC (a Contributor member of the publisher), so no long-lived secret is stored - see D30. |
 | Marketplace publisher verification pending | Only the "verified" badge; not a publish gate | Prerequisites (6+ months published, 6+ months domain) plus a known publisher-side Details-tab fault - see the research note on publisher verification below. |
 | Public projects unsupported | Audience limitation | Scope v1 to private projects; document. |
 
