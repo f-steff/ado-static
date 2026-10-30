@@ -2,11 +2,31 @@
  * Build-results report tab.
  * Rationale: mirrors the extension's other frames (plain CSS + ADO theme variables).
  */
+html,
+body {
+    height: 100%;
+    margin: 0;
+}
+
 #root {
+    display: flex;
+    flex-direction: column;
     height: 100%;
 }
 
+/* Flex column: the heading and tab strip keep their natural height and the
+   report frame takes the rest. This replaces the old magic
+   `height: calc(100vh - 60px)`, which overflowed the host as soon as the
+   heading/tab strip was taller than the assumed 60px. */
+.report-page {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
 .report-tabs {
+    flex: 0 0 auto;
     display: flex;
     gap: 4px;
     border-bottom: 1px solid rgba(var(--palette-neutral-10, 218, 218, 218), 1);
@@ -30,9 +50,10 @@
 }
 
 .report-frame {
+    flex: 1 1 auto;
+    min-height: 0;
     width: 100%;
     border: 0;
-    height: calc(100vh - 60px);
 }
 
 .report-message {

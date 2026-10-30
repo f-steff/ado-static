@@ -106,6 +106,7 @@ async function listAttachments(
 /** Renders a tab strip and a sandboxed iframe for the selected attachment. */
 async function renderReports(root: HTMLElement, attachments: Attachment[]): Promise<void> {
   const page = document.createElement("div");
+  page.className = "report-page";
   page.appendChild(getHeading("h1", "Static page", iconFor("pages")));
 
   const tabs = document.createElement("div");
